@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Planify Enterprise - Task & Project Management</title>
+  
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
+  <!-- Custom Stylesheet -->
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+  <!-- Toast Notifications Container -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- AUTHENTICATION VIEW -->
+  <div id="auth-view" class="auth-wrapper" style="display: flex;">
+    <div id="auth-card" class="auth-container">
+      <div class="auth-header">
+        <div class="logo-container">
+          <i class="fa-solid fa-circle-check text-blue"></i>
+          <span>Planify Enterprise</span>
+        </div>
+        <h1 id="auth-title">Welcome Back</h1>
+        <p id="auth-subtitle">Sign in to manage your tasks and projects</p>
+      </div>
+
+      <form id="auth-form">
+        <div class="form-group register-only" style="display: none;">
+          <label for="reg-name">Full Name</label>
+          <input type="text" id="reg-name" class="form-control" placeholder="John Doe">
+        </div>
+
+        <div class="form-group">
+          <label for="auth-email">Email Address</label>
+          <input type="email" id="auth-email" class="form-control" placeholder="name@example.com" required>
+        </div>
+
+        <div class="form-group">
+          <label for="auth-password">Password</label>
+          <input type="password" id="auth-password" class="form-control" placeholder="••••••••" required>
+        </div>
+
+        <div class="form-group register-only" style="display: none;">
+          <label for="reg-role">System Role</label>
+          <select id="reg-role" class="form-control">
+            <option value="TEAM_MEMBER">Team Member</option>
+            <option value="PROJECT_MANAGER">Project Manager</option>
+            <option value="VIEWER_CLIENT">Viewer/Client</option>
+            <option value="CEO_ADMIN">CEO/Admin</option>
+          </select>
+        </div>
+
+        <button type="submit" id="auth-submit-btn" class="btn btn-primary" style="width: 100%; margin-top: 8px;">
+          Sign In
+        </button>
+      </form>
+
+      <div class="auth-footer">
+        <span id="auth-toggle-text">Don't have an account?</span>
+        <a href="#" id="auth-toggle-link">Create one</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- APPLICATION CORE VIEW -->
+  <div id="app-view" class="app-container" style="display: none;">
+    
+    <!-- Left Navigation Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header" style="justify-content: space-between;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <i class="fa-solid fa-circle-check brand-logo-icon"></i>
+          <span class="brand-name">Planify Enterprise</span>
+        </div>
+        <button id="create-project-btn" class="btn btn-secondary creator-only" style="height: 28px; width: 28px; padding: 0; border-radius: var(--rounded-md); display: inline-flex; align-items: center; justify-content: center; background: transparent; border-color: var(--colors-hairline-strong);" title="New Project">
+          <i class="fa-solid fa-plus"></i>
+        </button>
+      </div>
+      
+      <nav class="sidebar-nav view-tabs">
+        <button class="tab-btn active" data-tab="tab-board">
+          <i class="fa-solid fa-table-cells-large tab-icon"></i>
+          <span>Kanban Board</span>
+        </button>
+        <button class="tab-btn" data-tab="tab-mytasks">
+          <i class="fa-solid fa-list-check tab-icon"></i>
+          <span>My Tasks</span>
+        </button>
+        <button class="tab-btn" data-tab="tab-dashboard">
+          <i class="fa-solid fa-chart-pie tab-icon"></i>
+          <span>Dashboard</span>
+        </button>
+        <button class="tab-btn" data-tab="tab-logs">
+          <i class="fa-solid fa-clock-rotate-left tab-icon"></i>
+          <span>Audit Trail</span>
+        </button>
+        <button class="tab-btn" data-tab="tab-members">
+          <i class="fa-solid fa-user-group tab-icon"></i>
+          <span>Workspace Members</span>
+        </button>
+        <button class="tab-btn creator-only" data-tab="tab-settings" id="project-settings-sidebar-link">
+          <i class="fa-solid fa-sliders tab-icon"></i>
+          <span>Settings</span>
+        </button>
+      </nav>
+      
+      <div class="sidebar-footer">
+        <!-- Developer Role Switcher -->
+        <div class="role-switcher-container">
+          <label for="dev-role-select"><i class="fa-solid fa-arrows-spin"></i> Quick Switch:</label>
+          <select id="dev-role-select">
+            <option value="" disabled selected>Select Role</option>
+            <option value="admin">CEO/Admin (Alice)</option>
+            <option value="pm">Project Manager (Bob)</option>
+            <option value="member">Team Member (Charlie)</option>
+            <option value="viewer">Viewer/Client (Diana)</option>
+          </select>
+        </div>
+        
+        <div class="sidebar-user-badge">
+          <div class="user-avatar" id="user-avatar-initials">U</div>
+          <div class="user-info">
+            <span class="user-name" id="user-display-name">Loading...</span>
+          </div>
+          <button class="logout-btn" id="logout-btn" title="Sign Out">
+            <i class="fa-solid fa-right-from-bracket"></i>
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Workspace Area -->
+    <div class="workspace-main">
+      <!-- Top Utility Header Row -->
+      <header class="top-header">
+        <div class="search-box-wrapper">
+          <i class="fa-solid fa-magnifying-glass search-box-icon"></i>
+          <input type="text" id="task-search" class="search-box-input" placeholder="Search plans, tasks or people...">
+        </div>
+        
+        <div class="top-header-right">
+          <button class="header-icon-btn" title="Help"><i class="fa-regular fa-circle-question"></i></button>
+          <button class="header-icon-btn" title="Notifications"><i class="fa-regular fa-bell"></i></button>
+          
+          <div class="header-user-avatar">
+            <div class="user-avatar-circle" id="header-user-initials-badge">U</div>
+          </div>
+        </div>
+      </header>
+
+      <!-- Second Header: Project / Plan Details -->
+      <div class="plan-header">
+        <div class="plan-header-left">
+          <span class="plan-breadcrumb">PRODUCT DEVELOPMENT TEAM</span>
+          <div class="project-title-dropdown-wrapper">
+            <select id="project-selector" class="project-selector-dropdown">
+              <!-- Dynamically populated -->
+            </select>
+          </div>
+        </div>
+        
+        <div class="plan-header-right">
+          <!-- Overlapping Project Avatars -->
+          <div class="avatar-group" id="project-avatar-group">
+            <!-- Dynamically populated -->
+          </div>
+          
+          <div class="header-divider"></div>
+          
+          <!-- Filters Indicator -->
+          <div class="filters-indicator">
+            <span class="filter-item"><i class="fa-solid fa-filter"></i> Filter: All Tasks</span>
+            <span class="filter-item"><i class="fa-solid fa-layer-group"></i> Group by: Bucket</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scrollable Tab Panes Container -->
+      <main class="workspace-viewport">
+        
+        <!-- 1. Kanban Board -->
+        <div id="tab-board" class="tab-pane active">
+          <div class="kanban-board-container">
+            <div class="kanban-board">
+              
+              <!-- TO DO Column -->
+              <div class="kanban-column" data-status="TO_DO">
+                <div class="column-header">
+                  <div class="column-header-left">
+                    <span class="column-title">To Do</span>
+                    <span class="column-badge" id="badge-todo">0</span>
+                  </div>
+                  <div class="column-header-right">
+                    <button class="col-action-btn creator-only" id="create-task-todo-btn" title="Add task"><i class="fa-solid fa-plus"></i></button>
+                    <button class="col-action-btn" title="More options"><i class="fa-solid fa-ellipsis"></i></button>
+                  </div>
+                </div>
+                <div class="task-list" id="list-todo"></div>
+              </div>
+
+              <!-- IN PROGRESS Column -->
+              <div class="kanban-column" data-status="IN_PROGRESS">
+                <div class="column-header">
+                  <div class="column-header-left">
+                    <span class="column-title">In Progress</span>
+                    <span class="column-badge" id="badge-progress">0</span>
+                  </div>
+                  <div class="column-header-right">
+                    <button class="col-action-btn creator-only" id="create-task-progress-btn" title="Add task"><i class="fa-solid fa-plus"></i></button>
+                    <button class="col-action-btn" title="More options"><i class="fa-solid fa-ellipsis"></i></button>
+                  </div>
+                </div>
+                <div class="task-list" id="list-progress"></div>
+              </div>
+
+              <!-- REVIEW Column -->
+              <div class="kanban-column" data-status="REVIEW">
+                <div class="column-header">
+                  <div class="column-header-left">
+                    <span class="column-title">Review</span>
+                    <span class="column-badge" id="badge-review">0</span>
+                  </div>
+                  <div class="column-header-right">
+                    <button class="col-action-btn creator-only" id="create-task-review-btn" title="Add task"><i class="fa-solid fa-plus"></i></button>
+                    <button class="col-action-btn" title="More options"><i class="fa-solid fa-ellipsis"></i></button>
+                  </div>
+                </div>
+                <div class="task-list" id="list-review"></div>
+              </div>
+
+              <!-- COMPLETED/DONE Column -->
+              <div class="kanban-column" data-status="DONE">
+                <div class="column-header">
+                  <div class="column-header-left">
+                    <span class="column-title">Completed</span>
+                    <span class="column-badge" id="badge-done">0</span>
+                  </div>
+                  <div class="column-header-right">
+                    <button class="col-action-btn creator-only" id="create-task-done-btn" title="Add task"><i class="fa-solid fa-plus"></i></button>
+                    <button class="col-action-btn" title="More options"><i class="fa-solid fa-ellipsis"></i></button>
+                  </div>
+                </div>
+                <div class="task-list" id="list-done"></div>
+              </div>
+
+              <!-- DUMMY ADD BUCKET COLUMN -->
+              <div class="add-bucket-column">
+                <button class="add-bucket-btn" id="create-task-btn">
+                  <i class="fa-solid fa-plus"></i>
+                  <span>Add new bucket</span>
+                </button>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. My Tasks Tab -->
+        <div id="tab-mytasks" class="tab-pane">
+          <div class="pane-content-wrapper">
+            <div class="pane-section-header">
+              <h2>My Tasks</h2>
+              <p>Tasks currently assigned to you in this project.</p>
+            </div>
+            <div class="mytasks-list" id="mytasks-list-container">
+              <!-- Dynamically populated list -->
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. Dashboard Tab -->
+        <div id="tab-dashboard" class="tab-pane">
+          <div class="pane-content-wrapper">
+            <div class="pane-section-header">
+              <h2>Project Dashboard</h2>
+              <p>Analytics, KPIs, and health indices for the selected project.</p>
+            </div>
+
+            <!-- Metrics Cards -->
+            <div class="metrics-grid">
+              <div class="metric-card">
+                <div class="metric-icon blue"><i class="fa-solid fa-list-check"></i></div>
+                <div class="metric-details">
+                  <h3>Total Tasks</h3>
+                  <span class="number" id="metric-total-val">0</span>
+                </div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-icon green"><i class="fa-solid fa-circle-check"></i></div>
+                <div class="metric-details">
+                  <h3>Completed</h3>
+                  <span class="number" id="metric-completed-val">0</span>
+                </div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-icon orange"><i class="fa-solid fa-spinner"></i></div>
+                <div class="metric-details">
+                  <h3>In Progress</h3>
+                  <span class="number" id="metric-progress-val">0</span>
+                </div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-icon red"><i class="fa-solid fa-triangle-exclamation"></i></div>
+                <div class="metric-details">
+                  <h3>Delayed</h3>
+                  <span class="number" id="metric-delayed-val">0</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Graphical Charts & Health Index -->
+            <div class="dashboard-analytics-section">
+              <div class="analytics-card">
+                <h3>Task Status Breakdown</h3>
+                <div class="chart-wrapper">
+                  <canvas id="statusChart"></canvas>
+                </div>
+              </div>
+              <div class="analytics-card health-index-card">
+                <h3>Project Health Index</h3>
+                <div class="health-status-container">
+                  <div class="health-percentage" id="health-percentage-val">0%</div>
+                  <div class="health-label" id="health-label-text">Healthy</div>
+                  <p style="font-size: 13px; color: var(--colors-slate); margin-top: 8px;">Overall completion rate based on closed tasks versus total scope.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. Audit Trail Tab -->
+        <div id="tab-logs" class="tab-pane">
+          <div class="pane-content-wrapper">
+            <div class="pane-section-header">
+              <h2>Activity Log & Audit Trail</h2>
+              <p>Audit trail of operations executed within the project context.</p>
+            </div>
+            <div class="logs-panel">
+              <div class="logs-list" id="logs-list-container">
+                <!-- Dynamically populated -->
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 5. Workspace Members Tab -->
+        <div id="tab-members" class="tab-pane">
+          <div class="pane-content-wrapper">
+            <div class="pane-section-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+              <div>
+                <h2>Workspace Members</h2>
+                <p>Manage users authorized to view or edit tasks in this project.</p>
+              </div>
+              <button id="add-member-trigger-btn" class="btn btn-primary creator-only" onclick="openEditProjectModal()">
+                <i class="fa-solid fa-user-plus"></i> Invite Member
+              </button>
+            </div>
+
+            <div class="members-dashboard-panel">
+              <div class="project-members-list" id="tab-members-list-container">
+                <!-- Listed members -->
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 6. Settings Tab -->
+        <div id="tab-settings" class="tab-pane">
+          <div class="pane-content-wrapper">
+            <div class="pane-section-header">
+              <h2>Project Settings</h2>
+              <p>Configure project properties, description, or delete the project.</p>
+            </div>
+
+            <div class="settings-panel">
+              <form id="project-settings-form" class="settings-form">
+                <div class="form-group">
+                  <label for="settings-project-name">Project Name</label>
+                  <input type="text" id="settings-project-name" class="form-control" required>
+                </div>
+                
+                <div class="form-group">
+                  <label for="settings-project-desc">Description</label>
+                  <textarea id="settings-project-desc" class="form-control" rows="4"></textarea>
+                </div>
+
+                <div class="settings-actions-row">
+                  <button type="submit" class="btn btn-primary">Save Settings</button>
+                  <button type="button" id="settings-delete-project-btn" class="btn btn-danger creator-only">
+                    <i class="fa-regular fa-trash-can"></i> Delete Project
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- MODALS -->
+
+  <!-- A. Project Create / Edit Modal (Still used for background actions or PM/Admin creation) -->
+  <div id="project-modal" class="modal-overlay">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h2 class="modal-title" id="project-modal-title">New Project</h2>
+        <button class="modal-close" id="project-modal-close"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <form id="project-form">
+        <input type="hidden" id="project-form-id">
+        
+        <div class="form-group">
+          <label for="project-name">Project Name</label>
+          <input type="text" id="project-name" class="form-control" placeholder="e.g. Website Redesign" required>
+        </div>
+        
+        <div class="form-group">
+          <label for="project-desc">Description</label>
+          <textarea id="project-desc" class="form-control" placeholder="Summarize project goals and parameters..."></textarea>
+        </div>
+
+        <div id="project-members-section" class="member-manager-section" style="display: none;">
+          <h3>Manage Project Members</h3>
+          
+          <div class="project-members-list" id="modal-members-list">
+            <!-- Listed members -->
+          </div>
+
+          <div class="add-member-form creator-only">
+            <select id="project-member-select" class="form-control">
+              <option value="">Choose member to add...</option>
+            </select>
+            <button type="button" id="add-member-btn" class="btn btn-primary">
+              Add Member
+            </button>
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; margin-top: 24px;">
+          <button type="button" id="delete-project-btn" class="btn btn-danger creator-only" style="display: none;">
+            Delete Project
+          </button>
+          <div style="display: flex; gap: 8px; margin-left: auto;">
+            <button type="button" class="btn btn-secondary" id="project-modal-cancel">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save Project</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- B. Task Detail & Edit Modal -->
+  <div id="task-modal" class="modal-overlay">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h2 class="modal-title" id="task-modal-title">Task Details</h2>
+        <button class="modal-close" id="task-modal-close"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      
+      <form id="task-form">
+        <input type="hidden" id="task-form-id">
+        
+        <div class="form-group">
+          <label for="task-title">Task Title</label>
+          <input type="text" id="task-title" class="form-control task-detail-field" required>
+        </div>
+
+        <div class="form-group">
+          <label for="task-desc">Description</label>
+          <textarea id="task-desc" class="form-control task-detail-field"></textarea>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="task-status">Status</label>
+            <select id="task-status" class="form-control">
+              <option value="TO_DO">To Do</option>
+              <option value="IN_PROGRESS">In Progress</option>
+              <option value="REVIEW">Review</option>
+              <option value="DONE">Completed</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="task-priority">Priority</label>
+            <select id="task-priority" class="form-control task-detail-field">
+              <option value="LOW">Low</option>
+              <option value="MEDIUM">Medium</option>
+              <option value="HIGH">High</option>
+              <option value="URGENT">Urgent</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="task-assignee">Assignee</label>
+            <select id="task-assignee" class="form-control task-detail-field">
+              <option value="">Unassigned</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="task-deadline">Deadline</label>
+            <input type="datetime-local" id="task-deadline" class="form-control task-detail-field">
+          </div>
+        </div>
+
+        <!-- Task Checklist Section -->
+        <div class="form-group" style="margin-top: 16px; border-top: 1px solid var(--colors-hairline-soft); padding-top: 16px;">
+          <label style="font-weight: 600; display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <span style="font-size: 13px; text-transform: uppercase; color: var(--colors-ink); letter-spacing: 0.5px;">Checklist / Sub-tasks</span>
+            <span id="modal-checklist-progress" style="font-size: 12px; color: var(--colors-slate);">0%</span>
+          </label>
+          <div class="modal-checklist-progress-bar-container" style="height: 4px; background: #e2e8f0; border-radius: 2px; margin-bottom: 12px; overflow: hidden;">
+            <div id="modal-checklist-progress-bar" style="height: 100%; width: 0%; background: #007d48; transition: width 0.3s;"></div>
+          </div>
+          <div id="modal-checklist-items" class="modal-checklist-items" style="display: flex; flex-direction: column; gap: 8px; max-height: 180px; overflow-y: auto; margin-bottom: 12px; padding-right: 4px;">
+            <!-- Rendered checklist items -->
+          </div>
+          <div class="add-checklist-item-row" id="add-checklist-item-row" style="display: flex; gap: 8px;">
+            <input type="text" id="new-checklist-item-input" class="form-control" placeholder="Add a checklist item..." style="flex: 1; height: 36px; font-size: 13px;">
+            <button type="button" id="add-checklist-item-btn" class="btn btn-secondary" style="height: 36px; padding: 0 12px; font-size: 12px;">Add</button>
+          </div>
+        </div>
+
+        <div id="modal-delay-flag-container" style="display: none; margin-bottom: 12px; margin-top: 12px;">
+          <div class="delay-flag"><i class="fa-solid fa-triangle-exclamation"></i> Overdue (Delayed)</div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; margin-top: 24px;">
+          <button type="button" id="delete-task-btn" class="btn btn-danger creator-only">
+            Delete Task
+          </button>
+          <div style="display: flex; gap: 8px; margin-left: auto;">
+            <button type="button" class="btn btn-secondary" id="task-modal-cancel">Cancel</button>
+            <button type="submit" class="btn btn-primary" id="save-task-btn">Save Changes</button>
+          </div>
+        </div>
+      </form>
+
+      <!-- Comments Section -->
+      <div class="modal-comments-section" style="border-top: 1px solid var(--colors-hairline-soft); margin-top: 20px; padding-top: 16px;">
+        <h3 style="font-size: 13px; text-transform: uppercase; color: var(--colors-ink); letter-spacing: 0.5px; margin-bottom: 12px;">Comments & Discussions</h3>
+        <div class="comments-container" id="modal-comments-container">
+          <!-- Dynamically populated comments -->
+        </div>
+
+        <form id="comment-form" class="comment-form">
+          <input type="text" id="comment-input" class="form-control" placeholder="Write a comment..." required>
+          <button type="submit" id="comment-submit-btn" class="btn btn-primary">
+            Send
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Creator Button Shortcuts -->
+  <button id="edit-project-btn" class="btn btn-secondary creator-only" style="display: none;"></button>
+
+  <!-- Custom Javascript Files -->
+  <script src="js/api.js"></script>
+  <script src="js/components.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
