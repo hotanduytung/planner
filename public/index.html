@@ -172,10 +172,10 @@
         </div>
         
         <div class="top-header-right">
-          <button class="header-icon-btn" title="Help"><i class="fa-regular fa-circle-question"></i></button>
-          <button class="header-icon-btn" title="Notifications"><i class="fa-regular fa-bell"></i></button>
+          <button id="help-trigger-btn" class="header-icon-btn" title="Help"><i class="fa-regular fa-circle-question"></i></button>
+          <button id="notifications-trigger-btn" class="header-icon-btn" title="Notifications"><i class="fa-regular fa-bell"></i></button>
           
-          <div class="header-user-avatar">
+          <div id="profile-trigger-btn" class="header-user-avatar" style="cursor: pointer;">
             <div class="user-avatar-circle" id="header-user-initials-badge">U</div>
           </div>
         </div>
@@ -292,7 +292,7 @@
               <div class="add-bucket-column">
                 <button class="add-bucket-btn" id="create-task-btn">
                   <i class="fa-solid fa-plus"></i>
-                  <span>Add new bucket</span>
+                  <span>Add new task</span>
                 </button>
               </div>
 
@@ -634,6 +634,77 @@
 
   <!-- Creator Button Shortcuts -->
   <button id="edit-project-btn" class="btn btn-secondary creator-only" style="display: none;"></button>
+
+  <!-- Help & Guide Modal -->
+  <div id="help-modal" class="modal-overlay">
+    <div class="modal-container" style="max-width: 500px;">
+      <div class="modal-header">
+        <h2 class="modal-title"><i class="fa-solid fa-circle-info" style="color: var(--colors-primary); margin-right: 8px;"></i> Planify Help & Guide</h2>
+        <button class="modal-close" id="help-modal-close"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body" style="padding-top: 12px; font-size: 14px; line-height: 1.6; color: var(--colors-ink);">
+        <p>Welcome to <strong>Planify Enterprise</strong>, a complete clone of Microsoft Planner featuring Role-Based Access Control (RBAC).</p>
+        
+        <h3 style="font-size: 15px; font-weight: 700; margin: 16px 0 8px; color: var(--colors-ink-deep);">🔑 Role-Based Access Control (RBAC) Matrix:</h3>
+        <ul style="padding-left: 20px; display: flex; flex-direction: column; gap: 6px;">
+          <li><strong>CEO/Admin (Alice)</strong>: Full permissions across all projects and tasks. Can add/remove members, create projects, and edit all tasks.</li>
+          <li><strong>Project Manager (Bob)</strong>: Can create projects and has full edit access to tasks in projects they belong to.</li>
+          <li><strong>Team Member (Charlie)</strong>: Can drag and update status/checklist on tasks <em>assigned to them</em>. Can write comments. Cannot edit overall task titles or delete tasks.</li>
+          <li><strong>Viewer/Client (Diana)</strong>: Read-only access to Kanban Board, Grid View, and Dashboard. Cannot make any changes.</li>
+        </ul>
+
+        <h3 style="font-size: 15px; font-weight: 700; margin: 16px 0 8px; color: var(--colors-ink-deep);">💡 Pro Tips:</h3>
+        <ul style="padding-left: 20px; display: flex; flex-direction: column; gap: 6px;">
+          <li><strong>View Modes</strong>: Click the <strong>Board / Grid</strong> toggle at the top right of the Kanban page to switch layout views.</li>
+          <li><strong>Checklists</strong>: Open a task details modal to interactively manage checklists. A progress bar will show on the Kanban card.</li>
+          <li><strong>Delays</strong>: Incomplete tasks that past their deadline are flagged as <em>Delayed</em> and marked in red automatically.</li>
+        </ul>
+      </div>
+      <div style="display: flex; justify-content: flex-end; margin-top: 24px; border-top: 1px solid var(--colors-hairline); padding-top: 16px;">
+        <button class="btn btn-primary" id="help-modal-ok-btn">Got it</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Notifications Modal -->
+  <div id="notifications-modal" class="modal-overlay">
+    <div class="modal-container" style="max-width: 500px;">
+      <div class="modal-header">
+        <h2 class="modal-title"><i class="fa-solid fa-bell" style="color: var(--colors-primary); margin-right: 8px;"></i> Project Notifications</h2>
+        <button class="modal-close" id="notifications-modal-close"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body" style="padding-top: 12px; max-height: 350px; overflow-y: auto;">
+        <div id="notifications-list" style="display: flex; flex-direction: column; gap: 10px;">
+          <!-- Dynamically populated activity logs -->
+        </div>
+      </div>
+      <div style="display: flex; justify-content: flex-end; margin-top: 24px; border-top: 1px solid var(--colors-hairline); padding-top: 16px;">
+        <button class="btn btn-secondary" id="notifications-modal-close-btn">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- User Profile Modal -->
+  <div id="profile-modal" class="modal-overlay">
+    <div class="modal-container" style="max-width: 400px;">
+      <div class="modal-header">
+        <h2 class="modal-title"><i class="fa-solid fa-circle-user" style="color: var(--colors-primary); margin-right: 8px;"></i> User Profile Details</h2>
+        <button class="modal-close" id="profile-modal-close"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body" style="padding-top: 16px; text-align: center;">
+        <div id="profile-avatar" style="width: 80px; height: 80px; border-radius: 50%; background: var(--colors-primary); color: white; font-size: 32px; font-weight: 700; line-height: 80px; margin: 0 auto 16px; display: inline-block;">U</div>
+        <h3 id="profile-name" style="font-size: 18px; font-weight: 700; margin-bottom: 4px; color: var(--colors-ink-deep);">User Name</h3>
+        <p id="profile-email" style="font-size: 14px; color: var(--colors-slate); margin-bottom: 12px;">user@example.com</p>
+        <span id="profile-role" class="member-item-role" style="padding: 4px 12px; font-size: 12px; font-weight: 600; border-radius: 12px; background: var(--colors-surface-hover); color: var(--colors-slate);">Role</span>
+        
+        <div style="margin-top: 24px; border-top: 1px solid var(--colors-hairline); padding-top: 16px; display: flex; flex-direction: column; gap: 8px;">
+          <button class="btn btn-danger" id="profile-modal-logout-btn" style="width: 100%;">
+            <i class="fa-solid fa-right-from-bracket" style="margin-right: 6px;"></i> Sign Out
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- Custom Javascript Files -->
   <script src="js/api.js"></script>

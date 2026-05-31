@@ -133,7 +133,26 @@ const DOM = {
   
   // Activity Log
   logsListContainer: document.getElementById('logs-list-container'),
-  toastContainer: document.getElementById('toast-container')
+  toastContainer: document.getElementById('toast-container'),
+  
+  // Help Modal
+  helpTrigger: document.getElementById('help-trigger-btn'),
+  helpModal: document.getElementById('help-modal'),
+  helpModalClose: document.getElementById('help-modal-close'),
+  helpModalOk: document.getElementById('help-modal-ok-btn'),
+  
+  // Notifications Modal
+  notificationsTrigger: document.getElementById('notifications-trigger-btn'),
+  notificationsModal: document.getElementById('notifications-modal'),
+  notificationsModalClose: document.getElementById('notifications-modal-close'),
+  notificationsModalCloseBtn: document.getElementById('notifications-modal-close-btn'),
+  notificationsList: document.getElementById('notifications-list'),
+  
+  // Profile Modal
+  profileTrigger: document.getElementById('profile-trigger-btn'),
+  profileModal: document.getElementById('profile-modal'),
+  profileModalClose: document.getElementById('profile-modal-close'),
+  profileModalLogout: document.getElementById('profile-modal-logout-btn')
 };
 
 // UI Notification Helper
@@ -554,6 +573,17 @@ function renderKanbanBoard(tasksList = State.tasks) {
   document.querySelectorAll('.task-card').forEach(card => {
     card.addEventListener('dblclick', () => openTaskModal(card.dataset.id));
   });
+  
+  // Wire up ellipsis options dropdown context menus
+  document.querySelectorAll('.kanban-column').forEach(column => {
+    const status = column.dataset.status;
+    const ellipsisBtn = column.querySelector('.col-action-btn[title="More options"]');
+    if (ellipsisBtn) {
+      ellipsisBtn.addEventListener('click', (e) => {
+        showColumnContextMenu(e, status);
+      });
+    }
+  });
 
   setupDragAndDrop();
 }
@@ -823,6 +853,177 @@ async function loadSettingsTab() {
   } catch (e) {
     // Fail silently
   }
+}
+
+// HELP, NOTIFICATION & PROFILE MODALS
+function openHelpModal() {
+  if (DOM.helpModal) DOM.helpModal.classList.add('active');
+}
+
+async function openProfileModal() {
+  if (!State.currentUser || !DOM.profileModal) return;
+  
+  const user = State.currentUser;
+  const profileAvatar = document.getElementById('profile-avatar');
+  const profileName = document.getElementById('profile-name');
+  const profileEmail = document.getElementById('profile-email');
+  const profileRole = document.getElementById('profile-role');
+  
+  const initials = user.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+  if (profileAvatar) {
+    profileAvatar.innerText = initials;
+    const cssClass = Components.getAssigneeClass(initials);
+    profileAvatar.className = '';
+    profileAvatar.style.width = '80px';
+    profileAvatar.style.height = '80px';
+    profileAvatar.style.borderRadius = '50%';
+    profileAvatar.style.color = 'white';
+    profileAvatar.style.fontSize = '32px';
+    profileAvatar.style.fontWeight = '700';
+    profileAvatar.style.lineHeight = '80px';
+    profileAvatar.style.margin = '0 auto 16px';
+    profileAvatar.style.display = 'inline-block';
+    
+    // Add color theme matching components.js
+    if (cssClass === 'ac') profileAvatar.style.background = '#0078d4';
+    else if (cssClass === 'bm') profileAvatar.style.background = '#107c41';
+    else if (cssClass === 'cv') profileAvatar.style.background = '#d83b01';
+    else if (cssClass === 'dw') profileAvatar.style.background = '#8764b8';
+    else profileAvatar.style.background = '#7a7574';
+  }
+  
+  if (profileName) profileName.innerText = user.name;
+  if (profileEmail) profileEmail.innerText = user.email;
+  if (profileRole) profileRole.innerText = user.role.replace('_', ' ');
+  
+  DOM.profileModal.classList.add('active');
+}
+
+async function openNotificationsModal() {
+  if (!DOM.notificationsModal || !DOM.notificationsList) return;
+  DOM.notificationsList.innerHTML = '<div style="color: var(--colors-slate); text-align: center; padding: 1rem;">Loading notifications...</div>';
+  
+  DOM.notificationsModal.classList.add('active');
+  
+  try {
+    const logs = await API.getActivityLogs(State.selectedProjectId);
+    DOM.notificationsList.innerHTML = '';
+    
+    if (logs.length === 0) {
+      DOM.notificationsList.innerHTML = '<div style="color: var(--colors-slate); text-align: center; padding: 1rem;">No project activities yet.</div>';
+      return;
+    }
+    
+    logs.slice(0, 20).forEach(log => {
+      const html = Components.activityLogItem(log);
+      DOM.notificationsList.insertAdjacentHTML('beforeend', html);
+    });
+  } catch (error) {
+    DOM.notificationsList.innerHTML = `<div style="color: #a80000; text-align: center; padding: 1rem;">Failed to load activities: ${error.message}</div>`;
+  }
+}
+
+// COLUMN CONTEXT MENU & SORTING
+function showColumnContextMenu(e, status) {
+  e.stopPropagation();
+  const existingMenu = document.getElementById('column-context-menu');
+  if (existingMenu) existingMenu.remove();
+
+  const menu = document.createElement('div');
+  menu.id = 'column-context-menu';
+  menu.style.position = 'absolute';
+  menu.style.top = `${e.pageY}px`;
+  menu.style.left = `${e.pageX}px`;
+  menu.style.background = 'var(--colors-card-bg)';
+  menu.style.border = '1px solid var(--colors-hairline-strong)';
+  menu.style.borderRadius = 'var(--rounded-md)';
+  menu.style.boxShadow = 'var(--shadow-level2)';
+  menu.style.padding = '4px 0';
+  menu.style.zIndex = '1000';
+  menu.style.fontSize = '13px';
+  menu.style.minWidth = '160px';
+
+  // Option 1: Add Task
+  const addTaskOption = document.createElement('div');
+  addTaskOption.style.padding = '8px 12px';
+  addTaskOption.style.cursor = 'pointer';
+  addTaskOption.style.display = 'flex';
+  addTaskOption.style.alignItems = 'center';
+  addTaskOption.style.gap = '8px';
+  addTaskOption.innerHTML = '<i class="fa-solid fa-plus" style="color: var(--colors-primary);"></i> Add Task';
+  addTaskOption.addEventListener('mouseenter', () => addTaskOption.style.background = 'var(--colors-surface-hover)');
+  addTaskOption.addEventListener('mouseleave', () => addTaskOption.style.background = 'transparent');
+  addTaskOption.addEventListener('click', () => {
+    menu.remove();
+    openAddTaskModal();
+    DOM.taskStatusSelect.value = status;
+  });
+
+  // Option 2: Sort tasks by deadline
+  const sortDeadlineOption = document.createElement('div');
+  sortDeadlineOption.style.padding = '8px 12px';
+  sortDeadlineOption.style.cursor = 'pointer';
+  sortDeadlineOption.style.display = 'flex';
+  sortDeadlineOption.style.alignItems = 'center';
+  sortDeadlineOption.style.gap = '8px';
+  sortDeadlineOption.innerHTML = '<i class="fa-regular fa-calendar" style="color: var(--colors-primary);"></i> Sort by Deadline';
+  sortDeadlineOption.addEventListener('mouseenter', () => sortDeadlineOption.style.background = 'var(--colors-surface-hover)');
+  sortDeadlineOption.addEventListener('mouseleave', () => sortDeadlineOption.style.background = 'transparent');
+  sortDeadlineOption.addEventListener('click', () => {
+    menu.remove();
+    sortColumnTasks(status, 'deadline');
+  });
+
+  // Option 3: Sort tasks by priority
+  const sortPriorityOption = document.createElement('div');
+  sortPriorityOption.style.padding = '8px 12px';
+  sortPriorityOption.style.cursor = 'pointer';
+  sortPriorityOption.style.display = 'flex';
+  sortPriorityOption.style.alignItems = 'center';
+  sortPriorityOption.style.gap = '8px';
+  sortPriorityOption.innerHTML = '<i class="fa-solid fa-flag" style="color: var(--colors-primary);"></i> Sort by Priority';
+  sortPriorityOption.addEventListener('mouseenter', () => sortPriorityOption.style.background = 'var(--colors-surface-hover)');
+  sortPriorityOption.addEventListener('mouseleave', () => sortPriorityOption.style.background = 'transparent');
+  sortPriorityOption.addEventListener('click', () => {
+    menu.remove();
+    sortColumnTasks(status, 'priority');
+  });
+
+  menu.appendChild(addTaskOption);
+  menu.appendChild(sortDeadlineOption);
+  menu.appendChild(sortPriorityOption);
+  document.body.appendChild(menu);
+
+  const closeHandler = () => {
+    menu.remove();
+    document.removeEventListener('click', closeHandler);
+  };
+  setTimeout(() => {
+    document.addEventListener('click', closeHandler);
+  }, 50);
+}
+
+function sortColumnTasks(status, criteria) {
+  const columnTasks = State.tasks.filter(t => t.status === status);
+  if (criteria === 'deadline') {
+    columnTasks.sort((a, b) => {
+      const timeA = a.deadline ? new Date(a.deadline).getTime() : Infinity;
+      const timeB = b.deadline ? new Date(b.deadline).getTime() : Infinity;
+      return timeA - timeB;
+    });
+  } else if (criteria === 'priority') {
+    const priorityOrder = { 'URGENT': 1, 'HIGH': 2, 'MEDIUM': 3, 'LOW': 4 };
+    columnTasks.sort((a, b) => {
+      const pA = priorityOrder[a.priority] || 4;
+      const pB = priorityOrder[b.priority] || 4;
+      return pA - pB;
+    });
+  }
+
+  const otherTasks = State.tasks.filter(t => t.status !== status);
+  State.tasks = [...otherTasks, ...columnTasks];
+  renderKanbanBoard();
+  showToast(`Column tasks sorted by ${criteria}`, 'success');
 }
 
 // PROJECT MODAL
@@ -1524,6 +1725,42 @@ document.querySelectorAll('.copy-cred-btn').forEach(btn => {
     }
   });
 });
+
+// Help modal handlers
+if (DOM.helpTrigger) {
+  DOM.helpTrigger.addEventListener('click', openHelpModal);
+}
+if (DOM.helpModalClose) {
+  DOM.helpModalClose.addEventListener('click', () => DOM.helpModal.classList.remove('active'));
+}
+if (DOM.helpModalOk) {
+  DOM.helpModalOk.addEventListener('click', () => DOM.helpModal.classList.remove('active'));
+}
+
+// Notifications modal handlers
+if (DOM.notificationsTrigger) {
+  DOM.notificationsTrigger.addEventListener('click', openNotificationsModal);
+}
+if (DOM.notificationsModalClose) {
+  DOM.notificationsModalClose.addEventListener('click', () => DOM.notificationsModal.classList.remove('active'));
+}
+if (DOM.notificationsModalCloseBtn) {
+  DOM.notificationsModalCloseBtn.addEventListener('click', () => DOM.notificationsModal.classList.remove('active'));
+}
+
+// Profile modal handlers
+if (DOM.profileTrigger) {
+  DOM.profileTrigger.addEventListener('click', openProfileModal);
+}
+if (DOM.profileModalClose) {
+  DOM.profileModalClose.addEventListener('click', () => DOM.profileModal.classList.remove('active'));
+}
+if (DOM.profileModalLogout) {
+  DOM.profileModalLogout.addEventListener('click', () => {
+    DOM.profileModal.classList.remove('active');
+    logout();
+  });
+}
 
 // App init
 window.addEventListener('DOMContentLoaded', checkAuth);
