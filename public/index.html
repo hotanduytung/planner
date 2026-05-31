@@ -62,9 +62,35 @@
         </button>
       </form>
 
-      <div class="auth-footer">
+      <div class="auth-footer" style="margin-bottom: 16px;">
         <span id="auth-toggle-text">Don't have an account?</span>
         <a href="#" id="auth-toggle-link">Create one</a>
+      </div>
+
+      <!-- Demo Credentials Helper Panel -->
+      <div class="demo-credentials-helper" style="padding-top: 16px; border-top: 1px solid var(--colors-hairline);">
+        <h3 style="font-size: 11px; font-weight: 700; color: var(--colors-slate); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
+          <i class="fa-solid fa-key" style="color: var(--colors-primary);"></i>
+          <span>Quick Demo Logins (Password: password123)</span>
+        </h3>
+        <div style="display: flex; flex-direction: column; gap: 6px; font-size: 11.5px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; background: var(--colors-surface); padding: 6px 10px; border-radius: var(--rounded-md); border: 1px solid var(--colors-hairline-strong);">
+            <span><strong>Admin:</strong> admin@example.com</span>
+            <button type="button" class="copy-cred-btn btn" data-email="admin@example.com" style="height: 22px; padding: 0 6px; font-size: 10px; font-weight: 700; background: var(--colors-primary); color: white; border: none; border-radius: var(--rounded-xs); cursor: pointer;"><i class="fa-solid fa-arrow-right-to-bracket"></i> Auto Use</button>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; background: var(--colors-surface); padding: 6px 10px; border-radius: var(--rounded-md); border: 1px solid var(--colors-hairline-strong);">
+            <span><strong>PM:</strong> pm@example.com</span>
+            <button type="button" class="copy-cred-btn btn" data-email="pm@example.com" style="height: 22px; padding: 0 6px; font-size: 10px; font-weight: 700; background: var(--colors-primary); color: white; border: none; border-radius: var(--rounded-xs); cursor: pointer;"><i class="fa-solid fa-arrow-right-to-bracket"></i> Auto Use</button>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; background: var(--colors-surface); padding: 6px 10px; border-radius: var(--rounded-md); border: 1px solid var(--colors-hairline-strong);">
+            <span><strong>Member:</strong> member@example.com</span>
+            <button type="button" class="copy-cred-btn btn" data-email="member@example.com" style="height: 22px; padding: 0 6px; font-size: 10px; font-weight: 700; background: var(--colors-primary); color: white; border: none; border-radius: var(--rounded-xs); cursor: pointer;"><i class="fa-solid fa-arrow-right-to-bracket"></i> Auto Use</button>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; background: var(--colors-surface); padding: 6px 10px; border-radius: var(--rounded-md); border: 1px solid var(--colors-hairline-strong);">
+            <span><strong>Viewer:</strong> viewer@example.com</span>
+            <button type="button" class="copy-cred-btn btn" data-email="viewer@example.com" style="height: 22px; padding: 0 6px; font-size: 10px; font-weight: 700; background: var(--colors-primary); color: white; border: none; border-radius: var(--rounded-xs); cursor: pointer;"><i class="fa-solid fa-arrow-right-to-bracket"></i> Auto Use</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>

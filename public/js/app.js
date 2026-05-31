@@ -1264,5 +1264,21 @@ DOM.devRoleSelect.addEventListener('change', async (e) => {
   }
 });
 
+// Demo credentials buttons auto-fill and submit
+document.querySelectorAll('.copy-cred-btn').forEach(btn => {
+  btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    const email = btn.dataset.email;
+    if (DOM.authEmail) DOM.authEmail.value = email;
+    if (DOM.authPassword) DOM.authPassword.value = 'password123';
+    showToast(`Autofilled credentials for ${email}`, 'success');
+    
+    // Automatically trigger form submit for seamless demo login!
+    if (DOM.authForm) {
+      DOM.authForm.dispatchEvent(new Event('submit'));
+    }
+  });
+});
+
 // App init
 window.addEventListener('DOMContentLoaded', checkAuth);
