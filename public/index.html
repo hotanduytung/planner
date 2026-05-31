@@ -200,6 +200,18 @@
           
           <div class="header-divider"></div>
           
+          <!-- View Switcher -->
+          <div class="view-switcher-pill" style="display: flex; background: var(--colors-surface-hover); border-radius: var(--rounded-md); padding: 2px; border: 1px solid var(--colors-hairline-strong); margin-right: 12px;">
+            <button id="view-mode-board" class="view-switch-btn active" style="border: none; background: var(--colors-card-bg); padding: 4px 10px; font-size: 12px; font-weight: 600; border-radius: var(--rounded-sm); cursor: pointer; color: var(--colors-primary); display: flex; align-items: center; gap: 6px;" title="Kanban Board View">
+              <i class="fa-solid fa-table-cells-large"></i> <span>Board</span>
+            </button>
+            <button id="view-mode-grid" class="view-switch-btn" style="border: none; background: transparent; padding: 4px 10px; font-size: 12px; font-weight: 600; border-radius: var(--rounded-sm); cursor: pointer; color: var(--colors-slate); display: flex; align-items: center; gap: 6px;" title="Grid Data Table View">
+              <i class="fa-solid fa-table-list"></i> <span>Grid</span>
+            </button>
+          </div>
+          
+          <div class="header-divider"></div>
+          
           <!-- Filters Indicator -->
           <div class="filters-indicator">
             <span class="filter-item"><i class="fa-solid fa-filter"></i> Filter: All Tasks</span>
@@ -213,7 +225,7 @@
         
         <!-- 1. Kanban Board -->
         <div id="tab-board" class="tab-pane active">
-          <div class="kanban-board-container">
+          <div id="kanban-view-content" class="kanban-board-container">
             <div class="kanban-board">
               
               <!-- TO DO Column -->
@@ -286,6 +298,33 @@
 
             </div>
           </div>
+
+          <!-- Grid Sub-view Layout -->
+          <div id="grid-view-content" style="display: none; padding: 24px 32px; max-width: 100%;">
+            <div class="grid-table-container" style="background: var(--colors-card-bg); border: 1px solid var(--colors-hairline-strong); border-radius: var(--rounded-lg); overflow: hidden; box-shadow: var(--shadow-level1);">
+              <table class="grid-data-table" style="width: 100%; border-collapse: collapse; text-align: left; font-size: 13.5px;">
+                <thead>
+                  <tr style="background: var(--colors-surface); border-bottom: 1px solid var(--colors-hairline-strong); font-weight: 700;">
+                    <th class="sortable-header" data-sort="title" style="padding: 12px 16px; cursor: pointer; user-select: none;">
+                      Tên task <i class="fa-solid fa-sort" style="margin-left: 6px; font-size: 11px; color: var(--colors-slate);"></i>
+                    </th>
+                    <th class="sortable-header" data-sort="assignee" style="padding: 12px 16px; cursor: pointer; user-select: none;">
+                      Người phụ trách <i class="fa-solid fa-sort" style="margin-left: 6px; font-size: 11px; color: var(--colors-slate);"></i>
+                    </th>
+                    <th class="sortable-header" data-sort="status" style="padding: 12px 16px; cursor: pointer; user-select: none;">
+                      Trạng thái <i class="fa-solid fa-sort" style="margin-left: 6px; font-size: 11px; color: var(--colors-slate);"></i>
+                    </th>
+                    <th class="sortable-header" data-sort="deadline" style="padding: 12px 16px; cursor: pointer; user-select: none;">
+                      Hạn chót <i class="fa-solid fa-sort" style="margin-left: 6px; font-size: 11px; color: var(--colors-slate);"></i>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody id="grid-table-body">
+                  <!-- Rendered rows -->
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
 
         <!-- 2. My Tasks Tab -->
@@ -300,6 +339,8 @@
             </div>
           </div>
         </div>
+
+
 
         <!-- 3. Dashboard Tab -->
         <div id="tab-dashboard" class="tab-pane">

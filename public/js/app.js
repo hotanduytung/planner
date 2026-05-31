@@ -8,7 +8,11 @@ const State = {
   currentTab: 'tab-board',
   projectMembers: [],
   chartInstance: null,
-  currentChecklist: [] // Active checklist items being edited in task modal
+  currentChecklist: [], // Active checklist items being edited in task modal
+  boardViewMode: 'board', // 'board' or 'grid'
+  gridSortColumn: 'title',
+  gridSortDirection: 'asc',
+  gridSearchQuery: ''
 };
 
 // UI Elements mapping
@@ -106,6 +110,13 @@ const DOM = {
   
   // My Tasks list
   mytasksListContainer: document.getElementById('mytasks-list-container'),
+  
+  // Board View Mode Switcher & Content
+  viewModeBoard: document.getElementById('view-mode-board'),
+  viewModeGrid: document.getElementById('view-mode-grid'),
+  kanbanViewContent: document.getElementById('kanban-view-content'),
+  gridViewContent: document.getElementById('grid-view-content'),
+  gridTableBody: document.getElementById('grid-table-body'),
   
   // Comments
   commentsContainer: document.getElementById('modal-comments-container'),
@@ -291,6 +302,12 @@ async function refreshActiveTab() {
   
   await loadProjectHeaderAvatars();
   
+  // Show or hide View Switcher pill depending on if we are in Board tab
+  const switcher = document.querySelector('.view-switcher-pill');
+  if (switcher) {
+    switcher.style.display = (State.currentTab === 'tab-board') ? 'flex' : 'none';
+  }
+  
   if (State.currentTab === 'tab-board') {
     await loadTasks();
   } else if (State.currentTab === 'tab-dashboard') {
@@ -328,10 +345,181 @@ async function loadProjectHeaderAvatars() {
 async function loadTasks() {
   try {
     State.tasks = await API.getTasks(State.selectedProjectId);
-    renderKanbanBoard();
+    
+    // Update view mode display classes
+    if (State.boardViewMode === 'grid') {
+      if (DOM.kanbanViewContent) DOM.kanbanViewContent.style.display = 'none';
+      if (DOM.gridViewContent) DOM.gridViewContent.style.display = 'block';
+      
+      // Update switcher active states
+      if (DOM.viewModeGrid) {
+        DOM.viewModeGrid.classList.add('active');
+        DOM.viewModeGrid.style.background = 'var(--colors-card-bg)';
+        DOM.viewModeGrid.style.color = 'var(--colors-primary)';
+      }
+      if (DOM.viewModeBoard) {
+        DOM.viewModeBoard.classList.remove('active');
+        DOM.viewModeBoard.style.background = 'transparent';
+        DOM.viewModeBoard.style.color = 'var(--colors-slate)';
+      }
+      
+      renderGridViewTable();
+    } else {
+      if (DOM.kanbanViewContent) DOM.kanbanViewContent.style.display = 'block';
+      if (DOM.gridViewContent) DOM.gridViewContent.style.display = 'none';
+      
+      // Update switcher active states
+      if (DOM.viewModeBoard) {
+        DOM.viewModeBoard.classList.add('active');
+        DOM.viewModeBoard.style.background = 'var(--colors-card-bg)';
+        DOM.viewModeBoard.style.color = 'var(--colors-primary)';
+      }
+      if (DOM.viewModeGrid) {
+        DOM.viewModeGrid.classList.remove('active');
+        DOM.viewModeGrid.style.background = 'transparent';
+        DOM.viewModeGrid.style.color = 'var(--colors-slate)';
+      }
+      
+      renderKanbanBoard();
+    }
   } catch (error) {
     showToast('Failed to load tasks: ' + error.message, 'error');
   }
+}
+
+// Render task items in Grid (Data Table) View
+function renderGridViewTable(tasksList = State.tasks) {
+  if (!DOM.gridTableBody) return;
+  DOM.gridTableBody.innerHTML = '';
+
+  let filteredTasks = [...tasksList];
+  
+  // Apply Search query (from top-header search box query)
+  const query = (DOM.taskSearch ? DOM.taskSearch.value : '').toLowerCase().trim();
+  if (query) {
+    filteredTasks = filteredTasks.filter(task => {
+      const titleMatch = task.title.toLowerCase().includes(query);
+      const descMatch = (task.description || '').toLowerCase().includes(query);
+      const assigneeMatch = (task.assignee_name || '').toLowerCase().includes(query);
+      return titleMatch || descMatch || assigneeMatch;
+    });
+  }
+
+  // Apply Sorting
+  filteredTasks.sort((a, b) => {
+    let valA, valB;
+    if (State.gridSortColumn === 'title') {
+      valA = a.title || '';
+      valB = b.title || '';
+      return State.gridSortDirection === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+    } else if (State.gridSortColumn === 'assignee') {
+      valA = a.assignee_name || '';
+      valB = b.assignee_name || '';
+      return State.gridSortDirection === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+    } else if (State.gridSortColumn === 'status') {
+      const statusOrder = { 'TO_DO': 1, 'IN_PROGRESS': 2, 'REVIEW': 3, 'DONE': 4 };
+      valA = statusOrder[a.status] || 0;
+      valB = statusOrder[b.status] || 0;
+      return State.gridSortDirection === 'asc' ? valA - valB : valB - valA;
+    } else if (State.gridSortColumn === 'deadline') {
+      const timeA = a.deadline ? new Date(a.deadline).getTime() : (State.gridSortDirection === 'asc' ? Infinity : -Infinity);
+      const timeB = b.deadline ? new Date(b.deadline).getTime() : (State.gridSortDirection === 'asc' ? Infinity : -Infinity);
+      return State.gridSortDirection === 'asc' ? timeA - timeB : timeB - timeA;
+    }
+    return 0;
+  });
+
+  // Update header icons for sorting
+  document.querySelectorAll('.sortable-header').forEach(header => {
+    const col = header.dataset.sort;
+    const icon = header.querySelector('i');
+    if (!icon) return;
+    if (col === State.gridSortColumn) {
+      if (State.gridSortDirection === 'asc') {
+        icon.className = 'fa-solid fa-sort-up';
+        icon.style.color = 'var(--colors-primary)';
+      } else {
+        icon.className = 'fa-solid fa-sort-down';
+        icon.style.color = 'var(--colors-primary)';
+      }
+    } else {
+      icon.className = 'fa-solid fa-sort';
+      icon.style.color = 'var(--colors-slate)';
+    }
+  });
+
+  if (filteredTasks.length === 0) {
+    DOM.gridTableBody.innerHTML = `
+      <tr>
+        <td colspan="4" style="text-align: center; color: var(--colors-slate); padding: 32px; font-style: italic;">
+          Không tìm thấy task nào.
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  filteredTasks.forEach(task => {
+    const initials = task.assignee_name 
+      ? task.assignee_name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() 
+      : 'U';
+    const assigneeClass = Components.getAssigneeClass(initials);
+    
+    const assigneeHtml = task.assignee_name 
+      ? `<div style="display: flex; align-items: center; gap: 8px;">
+           <div class="assignee-avatar-bubble ${assigneeClass}">${initials}</div>
+           <span>${task.assignee_name}</span>
+         </div>`
+      : `<span style="color: var(--colors-slate); font-style: italic;">Chưa phân công</span>`;
+
+    // Status Badges
+    let statusHtml = '';
+    if (task.status === 'TO_DO') {
+      statusHtml = `<span class="badge" style="background: var(--priority-low-bg); color: var(--priority-low-text); padding: 4px 10px; border-radius: var(--rounded-md); font-weight: 600; font-size: 11px;">To Do</span>`;
+    } else if (task.status === 'IN_PROGRESS') {
+      statusHtml = `<span class="badge" style="background: var(--tag-feature-bg); color: var(--tag-feature-text); padding: 4px 10px; border-radius: var(--rounded-md); font-weight: 600; font-size: 11px;">In Progress</span>`;
+    } else if (task.status === 'REVIEW') {
+      statusHtml = `<span class="badge" style="background: var(--priority-high-bg); color: var(--priority-high-text); padding: 4px 10px; border-radius: var(--rounded-md); font-weight: 600; font-size: 11px;">Review</span>`;
+    } else if (task.status === 'DONE') {
+      statusHtml = `<span class="badge" style="background: var(--tag-marketing-bg); color: var(--tag-marketing-text); padding: 4px 10px; border-radius: var(--rounded-md); font-weight: 600; font-size: 11px;">Completed</span>`;
+    }
+
+    // Deadline formatting and delay flags
+    const isOverdue = !!task.is_delayed;
+    const dateText = task.deadline ? Components.formatDate(task.deadline) : 'Không có hạn chót';
+    const deadlineHtml = isOverdue
+      ? `<span style="color: #a80000; font-weight: 600; display: flex; align-items: center; gap: 6px;" title="Overdue (Delayed)">
+           <i class="fa-solid fa-triangle-exclamation"></i> ${dateText}
+         </span>`
+      : `<span style="color: var(--colors-slate);"><i class="fa-regular fa-calendar" style="margin-right: 6px;"></i>${dateText}</span>`;
+
+    // Priority badge
+    const priorityHtml = `<span class="task-card-priority priority-badge-${task.priority.toLowerCase()}" style="margin: 0; padding: 2px 6px; font-size: 11px; display: inline-flex; align-items: center; gap: 4px;" title="Priority: ${task.priority}">
+      <i class="fa-solid fa-flag"></i> ${task.priority}
+    </span>`;
+
+    const rowHtml = `
+      <tr class="grid-row-item" data-id="${task.id}" style="border-bottom: 1px solid var(--colors-hairline);">
+        <td style="padding: 14px 20px; font-weight: 600; color: var(--colors-ink-deep);">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            ${priorityHtml}
+            <span>${task.title}</span>
+          </div>
+        </td>
+        <td style="padding: 14px 20px;">${assigneeHtml}</td>
+        <td style="padding: 14px 20px;">${statusHtml}</td>
+        <td style="padding: 14px 20px;">${deadlineHtml}</td>
+      </tr>
+    `;
+    DOM.gridTableBody.insertAdjacentHTML('beforeend', rowHtml);
+  });
+
+  // Attach Row Click event listener
+  DOM.gridTableBody.querySelectorAll('.grid-row-item').forEach(row => {
+    row.addEventListener('click', () => {
+      openTaskModal(row.dataset.id);
+    });
+  });
 }
 
 // Redraw task cards in columns (optionally using a custom/filtered list)
@@ -1168,7 +1356,11 @@ if (DOM.taskSearch) {
   DOM.taskSearch.addEventListener('input', (e) => {
     const query = e.target.value.toLowerCase().trim();
     if (!query) {
-      renderKanbanBoard();
+      if (State.boardViewMode === 'grid') {
+        renderGridViewTable();
+      } else {
+        renderKanbanBoard();
+      }
       return;
     }
     
@@ -1179,9 +1371,62 @@ if (DOM.taskSearch) {
       return titleMatch || descMatch || assigneeMatch;
     });
     
-    renderKanbanBoard(filtered);
+    if (State.boardViewMode === 'grid') {
+      renderGridViewTable(filtered);
+    } else {
+      renderKanbanBoard(filtered);
+    }
   });
 }
+
+// VIEW SWITCHER HANDLERS
+if (DOM.viewModeBoard && DOM.viewModeGrid) {
+  DOM.viewModeBoard.addEventListener('click', () => {
+    State.boardViewMode = 'board';
+    DOM.viewModeBoard.classList.add('active');
+    DOM.viewModeBoard.style.background = 'var(--colors-card-bg)';
+    DOM.viewModeBoard.style.color = 'var(--colors-primary)';
+    
+    DOM.viewModeGrid.classList.remove('active');
+    DOM.viewModeGrid.style.background = 'transparent';
+    DOM.viewModeGrid.style.color = 'var(--colors-slate)';
+    
+    if (DOM.kanbanViewContent) DOM.kanbanViewContent.style.display = 'block';
+    if (DOM.gridViewContent) DOM.gridViewContent.style.display = 'none';
+    
+    renderKanbanBoard();
+  });
+
+  DOM.viewModeGrid.addEventListener('click', () => {
+    State.boardViewMode = 'grid';
+    DOM.viewModeGrid.classList.add('active');
+    DOM.viewModeGrid.style.background = 'var(--colors-card-bg)';
+    DOM.viewModeGrid.style.color = 'var(--colors-primary)';
+    
+    DOM.viewModeBoard.classList.remove('active');
+    DOM.viewModeBoard.style.background = 'transparent';
+    DOM.viewModeBoard.style.color = 'var(--colors-slate)';
+    
+    if (DOM.kanbanViewContent) DOM.kanbanViewContent.style.display = 'none';
+    if (DOM.gridViewContent) DOM.gridViewContent.style.display = 'block';
+    
+    renderGridViewTable();
+  });
+}
+
+// GRID SORTING HEADERS HANDLERS
+document.querySelectorAll('.sortable-header').forEach(header => {
+  header.addEventListener('click', () => {
+    const col = header.dataset.sort;
+    if (State.gridSortColumn === col) {
+      State.gridSortDirection = State.gridSortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+      State.gridSortColumn = col;
+      State.gridSortDirection = 'asc';
+    }
+    renderGridViewTable();
+  });
+});
 
 // TRIGGERS AND SHORTCUTS
 DOM.createProjectBtn.addEventListener('click', openCreateProjectModal);

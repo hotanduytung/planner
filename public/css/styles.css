@@ -1471,3 +1471,48 @@ textarea.form-control {
   border-color: var(--colors-primary);
   background: #f0f4f9;
 }
+
+/* Grid Data Table styling */
+.grid-table-container {
+  overflow-x: auto;
+  margin-top: 10px;
+}
+
+.grid-data-table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.grid-data-table th, .grid-data-table td {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--colors-hairline);
+  white-space: nowrap;
+}
+
+.grid-data-table th {
+  background: #f8f9fa;
+  color: var(--colors-ink-deep);
+  font-weight: 700;
+}
+
+.grid-data-table tbody tr {
+  transition: background-color 0.15s ease;
+  cursor: pointer;
+}
+
+.grid-data-table tbody tr:hover {
+  background-color: #fcfbfa;
+}
+
+.grid-data-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.sortable-header:hover {
+  background-color: var(--colors-surface-hover) !important;
+  color: var(--colors-primary);
+}
+
+.sortable-header i {
+  transition: color 0.15s;
+}
