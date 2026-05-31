@@ -36,13 +36,16 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Database initialization wrapper
-let dbInitialized = false;
-const initDatabaseIfNeeded = async () => {
-  if (!dbInitialized) {
-    await initDb();
-    dbInitialized = true;
+// Database initialization wrapper (avoids race conditions)
+let dbInitPromise = null;
+const initDatabaseIfNeeded = () => {
+  if (!dbInitPromise) {
+    dbInitPromise = initDb().catch((err) => {
+      dbInitPromise = null; // reset to allow retry on subsequent requests
+      throw err;
+    });
   }
+  return dbInitPromise;
 };
 
 // Middleware to ensure DB is initialized in serverless contexts (like Vercel)
