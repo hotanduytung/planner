@@ -195,17 +195,18 @@ body {
   height: 38px;
   padding: 0 12px;
   border: 1px solid var(--colors-hairline-strong);
-  border-radius: var(--rounded-sm);
+  border-radius: var(--rounded-md);
   font-family: var(--font-family);
   font-size: 13px;
   outline: none;
   background: var(--colors-card-bg);
   color: var(--colors-ink);
-  transition: border-color 0.15s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .form-control:focus {
   border-color: var(--colors-primary);
+  box-shadow: 0 0 0 3px rgba(0, 120, 212, 0.15);
 }
 
 textarea.form-control {
@@ -298,11 +299,12 @@ textarea.form-control {
   width: 100%;
   text-align: left;
   position: relative;
-  transition: background-color 0.15s ease;
+  transition: background-color 0.15s ease, color 0.15s ease, padding-left 0.15s ease;
 }
 
 .sidebar-nav .tab-btn:hover {
   background: var(--colors-surface-hover);
+  padding-left: 24px;
 }
 
 .sidebar-nav .tab-btn.active {
@@ -1252,7 +1254,8 @@ textarea.form-control {
   justify-content: center;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.2s ease;
+  transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  backdrop-filter: blur(2px);
 }
 
 .modal-overlay.active {
@@ -1274,6 +1277,12 @@ textarea.form-control {
   display: flex;
   flex-direction: column;
   gap: 20px;
+  transform: scale(0.95);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.modal-overlay.active .modal-container {
+  transform: scale(1);
 }
 
 .modal-header {
