@@ -36,20 +36,43 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Initialize database and start the server
-const startServer = async () => {
-  try {
+// Database initialization wrapper
+let dbInitialized = false;
+const initDatabaseIfNeeded = async () => {
+  if (!dbInitialized) {
     await initDb();
-    app.listen(PORT, () => {
-      console.log(`==================================================`);
-      console.log(`  Microsoft Planner Clone Server running locally  `);
-      console.log(`  URL: http://localhost:${PORT}                    `);
-      console.log(`==================================================`);
-    });
-  } catch (error) {
-    console.error('Failed to start server:', error);
-    process.exit(1);
+    dbInitialized = true;
   }
 };
 
-startServer();
+// Middleware to ensure DB is initialized in serverless contexts (like Vercel)
+app.use(async (req, res, next) => {
+  try {
+    await initDatabaseIfNeeded();
+  } catch (error) {
+    console.error('Failed to initialize database on request:', error);
+  }
+  next();
+});
+
+// Start listening locally if not on Vercel
+if (!process.env.VERCEL) {
+  const startServer = async () => {
+    try {
+      await initDatabaseIfNeeded();
+      app.listen(PORT, () => {
+        console.log(`==================================================`);
+        console.log(`  Microsoft Planner Clone Server running locally  `);
+        console.log(`  URL: http://localhost:${PORT}                    `);
+        console.log(`==================================================`);
+      });
+    } catch (error) {
+      console.error('Failed to start server:', error);
+      process.exit(1);
+    }
+  };
+  startServer();
+}
+
+// Export app for Vercel Serverless Function deployment
+module.exports = app;
