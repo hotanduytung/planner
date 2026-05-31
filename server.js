@@ -14,9 +14,32 @@ const logsRouter = require('./routes/logs');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Database initialization wrapper (avoids race conditions)
+let dbInitPromise = null;
+const initDatabaseIfNeeded = () => {
+  if (!dbInitPromise) {
+    dbInitPromise = initDb().catch((err) => {
+      dbInitPromise = null; // reset to allow retry on subsequent requests
+      throw err;
+    });
+  }
+  return dbInitPromise;
+};
+
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// Middleware to ensure DB is initialized in serverless contexts (like Vercel)
+app.use(async (req, res, next) => {
+  try {
+    await initDatabaseIfNeeded();
+    next();
+  } catch (error) {
+    console.error('Failed to initialize database on request:', error);
+    res.status(500).json({ error: 'Database initialization failed: ' + error.message });
+  }
+});
 
 // Serve static frontend files
 app.use(express.static(path.join(__dirname, 'public')));
@@ -34,29 +57,6 @@ app.use('/api/projects/:projectId/logs', logsRouter);
 // Fallback for SPA routing to serve frontend
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-// Database initialization wrapper (avoids race conditions)
-let dbInitPromise = null;
-const initDatabaseIfNeeded = () => {
-  if (!dbInitPromise) {
-    dbInitPromise = initDb().catch((err) => {
-      dbInitPromise = null; // reset to allow retry on subsequent requests
-      throw err;
-    });
-  }
-  return dbInitPromise;
-};
-
-// Middleware to ensure DB is initialized in serverless contexts (like Vercel)
-app.use(async (req, res, next) => {
-  try {
-    await initDatabaseIfNeeded();
-    next();
-  } catch (error) {
-    console.error('Failed to initialize database on request:', error);
-    res.status(500).json({ error: 'Database initialization failed: ' + error.message });
-  }
 });
 
 // Start listening locally if not on Vercel
