@@ -3,7 +3,7 @@ const path = require('path');
 const bcrypt = require('bcryptjs');
 
 const dbPath = process.env.VERCEL 
-  ? '/tmp/database.db'
+  ? ':memory:'
   : path.resolve(__dirname, 'database.db');
 const db = new sqlite3.Database(dbPath);
 

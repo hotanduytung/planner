@@ -52,10 +52,11 @@ const initDatabaseIfNeeded = () => {
 app.use(async (req, res, next) => {
   try {
     await initDatabaseIfNeeded();
+    next();
   } catch (error) {
     console.error('Failed to initialize database on request:', error);
+    res.status(500).json({ error: 'Database initialization failed: ' + error.message });
   }
-  next();
 });
 
 // Start listening locally if not on Vercel
