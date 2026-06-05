@@ -13,7 +13,7 @@ const verifyTaskAccess = async (req, res, taskId) => {
   }
 
   // Admins bypass project membership check
-  if (req.user.role === 'CEO_ADMIN') {
+  if (req.user.role === 'CEO') {
     return task;
   }
 
@@ -60,7 +60,7 @@ router.get('/', authenticateToken, async (req, res) => {
 router.post('/', authenticateToken, async (req, res) => {
   try {
     const taskId = req.params.taskId;
-    const { content } = req.body;
+    const { content, is_report } = req.body;
 
     if (!content || !content.trim()) {
       return res.status(400).json({ error: 'Comment content cannot be empty' });
@@ -72,32 +72,27 @@ router.post('/', authenticateToken, async (req, res) => {
 
     const role = req.user.role;
 
-    // Block Viewer/Client
-    if (role === 'VIEWER_CLIENT') {
-      return res.status(403).json({ error: 'Access denied: Viewers cannot comment on tasks.' });
-    }
-
-    // Team Members can only comment on tasks assigned to them
-    if (role === 'TEAM_MEMBER' && task.assignee_id !== req.user.id) {
-      return res.status(403).json({ error: 'Access denied: Team Members can only comment on tasks assigned to them.' });
-    }
-
     // Insert comment
     await db.run(
-      'INSERT INTO comments (task_id, user_id, content) VALUES (?, ?, ?)',
-      [taskId, req.user.id, content]
+      'INSERT INTO comments (task_id, user_id, content, is_report) VALUES (?, ?, ?, ?)',
+      [taskId, req.user.id, content, is_report ? 1 : 0]
     );
 
     // Log activity
+    const activityType = is_report ? 'ADD_REPORT' : 'ADD_COMMENT';
+    const logDesc = is_report 
+      ? `${req.user.name} reported progress on task "${task.title}": "${content.substring(0, 30)}${content.length > 30 ? '...' : ''}".`
+      : `${req.user.name} commented on task "${task.title}": "${content.substring(0, 30)}${content.length > 30 ? '...' : ''}".`;
+
     await logActivity(
       task.project_id,
       taskId,
       req.user.id,
-      'ADD_COMMENT',
-      `${req.user.name} commented on task "${task.title}": "${content.substring(0, 30)}${content.length > 30 ? '...' : ''}".`
+      activityType,
+      logDesc
     );
 
-    res.status(201).json({ message: 'Comment added successfully' });
+    res.status(201).json({ message: is_report ? 'Progress report added successfully' : 'Comment added successfully' });
   } catch (error) {
     console.error('Create comment error:', error);
     res.status(500).json({ error: 'Server error adding comment' });

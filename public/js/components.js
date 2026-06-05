@@ -19,18 +19,40 @@ const Components = {
     return 'default';
   },
 
-  // Generates tags dynamically based on card titles
-  generateTags(title = '', description = '') {
+  // Generates tags dynamically based on card titles or custom labels
+  generateTags(title = '', description = '', labels) {
     const tags = [];
+    if (labels !== undefined) {
+      if (labels && labels.trim()) {
+        const list = labels.split(',').map(l => l.trim()).filter(l => l.length > 0);
+        list.forEach(label => {
+          const text = label.toLowerCase();
+          if (text === 'design ui') {
+            return;
+          }
+          let tagClass = 'tag-marketing';
+          if (text.includes('design') || text.includes('ui') || text.includes('layout') || text.includes('mockup') || text.includes('interface')) {
+            tagClass = 'tag-design';
+          } else if (text.includes('bug') || text.includes('fix')) {
+            tagClass = 'tag-bug';
+          } else if (text.includes('feature') || text.includes('spec')) {
+            tagClass = 'tag-feature';
+          } else if (text.includes('edit') || text.includes('review') || text.includes('timeline')) {
+            tagClass = 'tag-edit';
+          }
+          tags.push(`<span class="tag-badge ${tagClass}">${label}</span>`);
+        });
+        return `<div class="task-card-tags">${tags.join('')}</div>`;
+      }
+      return '';
+    }
+
     const text = (title + ' ' + description).toLowerCase();
     
-    if (text.includes('thiết kế') || text.includes('layout') || text.includes('ui') || text.includes('mockup') || text.includes('giao diện')) {
-      tags.push('<span class="tag-badge tag-design">DESIGN UI</span>');
-    }
-    if (text.includes('logic') || text.includes('drag') || text.includes('drop') || text.includes('dnd') || text.includes('kéo thả') || text.includes('api')) {
+    if (text.includes('logic') || text.includes('drag') || text.includes('drop') || text.includes('dnd') || text.includes('api')) {
       tags.push('<span class="tag-badge tag-bug">BUG FIX</span>');
     }
-    if (text.includes('cấu trúc') || text.includes('backend') || text.includes('framework') || text.includes('dự án') || text.includes('tài liệu') || text.includes('nghiên cứu')) {
+    if (text.includes('structure') || text.includes('backend') || text.includes('framework') || text.includes('project') || text.includes('doc') || text.includes('research')) {
       tags.push('<span class="tag-badge tag-feature">FEATURE</span>');
     }
     
@@ -44,7 +66,7 @@ const Components = {
   // Renders avatar group matching the reference screenshot visual state
   renderCardAssignees(task, initials) {
     const title = task.title || '';
-    if (title.includes('Thiết kế Layout')) {
+    if (title.includes('Detailed Kanban Board Layout Design') || title.includes('Layout Design')) {
       return `
         <div class="avatar-group">
           <div class="avatar-group-member cv" title="Charlie Developer (CV)">CV</div>
@@ -52,7 +74,7 @@ const Components = {
         </div>
       `;
     }
-    if (title.includes('Viết logic Drag')) {
+    if (title.includes('Write Backend Drag & Drop Sync Logic') || title.includes('Drag & Drop')) {
       return `
         <div class="avatar-group">
           <div class="avatar-group-member dw" title="Diana Client (DW)">DW</div>
@@ -63,8 +85,11 @@ const Components = {
     
     // Default single assignee
     const assigneeClass = this.getAssigneeClass(initials);
+    const displayAssigneeName = task.assignee_name
+      ? (task.assignee_designation ? `${task.assignee_name} - ${task.assignee_designation}` : task.assignee_name)
+      : 'Unassigned';
     return `
-      <div class="task-card-assignee" title="${task.assignee_name || 'Unassigned'}">
+      <div class="task-card-assignee" title="${displayAssigneeName}">
         <div class="assignee-avatar-bubble ${assigneeClass}">${initials}</div>
       </div>
     `;
@@ -78,7 +103,7 @@ const Components = {
     
     // Check if user is allowed to drag this card
     let isDraggable = false;
-    if (userRole === 'CEO_ADMIN' || userRole === 'PROJECT_MANAGER') {
+    if (userRole === 'CEO' || userRole === 'PM') {
       isDraggable = true;
     } else if (userRole === 'TEAM_MEMBER' && task.assignee_id === currentUserId) {
       isDraggable = true;
@@ -86,18 +111,9 @@ const Components = {
 
     const dragAttribute = isDraggable ? 'draggable="true"' : 'draggable="false" style="cursor: default;"';
     
-    // Parse checklist sub-tasks and calculate progress
-    let checklistItems = [];
-    if (task.checklist) {
-      try {
-        checklistItems = typeof task.checklist === 'string' ? JSON.parse(task.checklist) : task.checklist;
-      } catch (e) {
-        checklistItems = [];
-      }
-    }
-    
-    const totalChecklist = checklistItems.length;
-    const completedChecklist = checklistItems.filter(item => item.done).length;
+    // Calculate progress from database sub-task count
+    const totalChecklist = task.subtask_total !== undefined ? task.subtask_total : 0;
+    const completedChecklist = task.subtask_completed !== undefined ? task.subtask_completed : 0;
     const checklistPercent = totalChecklist > 0 ? Math.round((completedChecklist / totalChecklist) * 100) : 0;
     
     const checklistHtml = totalChecklist > 0 
@@ -117,10 +133,22 @@ const Components = {
     // Date display with delay flag class
     const isOverdue = task.is_delayed || false;
     const dateClass = isOverdue ? 'task-card-date delayed' : 'task-card-date';
+    
+    let dateRangeText = '';
+    if (task.start_date && task.deadline) {
+      dateRangeText = `${this.formatDate(task.start_date)} - ${this.formatDate(task.deadline)}`;
+    } else if (task.start_date) {
+      dateRangeText = `Start: ${this.formatDate(task.start_date)}`;
+    } else if (task.deadline) {
+      dateRangeText = `${this.formatDate(task.deadline)}`;
+    } else {
+      dateRangeText = 'No dates';
+    }
+
     const deadlineHtml = `
-      <div class="${dateClass}" title="Deadline">
+      <div class="${dateClass}" title="Start Date & Deadline">
         <i class="fa-regular fa-calendar"></i>
-        <span>${task.deadline ? this.formatDate(task.deadline) : 'No deadline'}</span>
+        <span>${dateRangeText}</span>
       </div>
     `;
 
@@ -133,12 +161,11 @@ const Components = {
       </span>
     `;
 
-    const tagsHtml = this.generateTags(task.title, task.description);
+    const tagsHtml = this.generateTags(task.title, task.description, task.labels);
     const assigneesHtml = this.renderCardAssignees(task, initials);
 
     return `
       <div class="task-card" id="task-${task.id}" data-id="${task.id}" ${dragAttribute}>
-        ${tagsHtml}
         <div class="task-card-title">${task.title}</div>
         
         ${checklistHtml}
@@ -171,7 +198,7 @@ const Components = {
   // HTML structure for project member rows inside tab or modal
   projectMemberItem(member, userRole, currentUserId, creatorId) {
     let showDelete = false;
-    if ((userRole === 'CEO_ADMIN' || userRole === 'PROJECT_MANAGER') && member.id !== creatorId) {
+    if (userRole === 'CEO' && member.id !== creatorId) {
       showDelete = true;
     }
     
@@ -181,10 +208,16 @@ const Components = {
          </button>` 
       : '';
 
+    const displayName = member.designation 
+      ? `${member.name} - ${member.designation}`
+      : member.name;
+
     return `
       <div class="member-list-item">
         <div class="member-item-info">
-          <span style="font-weight: 700; color: var(--colors-ink-deep);">${member.name}</span>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-weight: 700; color: var(--colors-ink-deep);">${displayName}</span>
+          </div>
           <span style="font-size: 11px; color: var(--colors-slate);">${member.email}</span>
         </div>
         <div style="display: flex; align-items: center; gap: 12px;">

@@ -76,10 +76,10 @@ const API = {
     return data;
   },
 
-  async register(email, password, name, role) {
+  async register(email, password, name, role, designation) {
     return await this.request('/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ email, password, name, role })
+      body: JSON.stringify({ email, password, name, role, designation })
     });
   },
 
@@ -87,6 +87,17 @@ const API = {
     const user = await this.request('/auth/me');
     this.setUser(user);
     return user;
+  },
+
+  async updateProfile(name, designation) {
+    const data = await this.request('/auth/profile', {
+      method: 'PUT',
+      body: JSON.stringify({ name, designation })
+    });
+    if (data.user) {
+      this.setUser(data.user);
+    }
+    return data;
   },
 
   async getUsers() {
@@ -109,12 +120,13 @@ const API = {
     });
   },
 
-  async updateProject(id, name, description) {
+  async updateProject(id, name, description, bucket_names, custom_buckets) {
     return await this.request(`/projects/${id}`, {
       method: 'PUT',
-      body: JSON.stringify({ name, description })
+      body: JSON.stringify({ name, description, bucket_names, custom_buckets })
     });
   },
+
 
   async deleteProject(id) {
     return await this.request(`/projects/${id}`, {
@@ -145,6 +157,10 @@ const API = {
     return await this.request(`/projects/${projectId}/tasks`);
   },
 
+  async getTask(projectId, taskId) {
+    return await this.request(`/projects/${projectId}/tasks/${taskId}`);
+  },
+
   async createTask(projectId, taskData) {
     return await this.request(`/projects/${projectId}/tasks`, {
       method: 'POST',
@@ -165,15 +181,26 @@ const API = {
     });
   },
 
+  async reorderTasks(projectId, taskIds, status) {
+    return await this.request(`/projects/${projectId}/tasks/reorder`, {
+      method: 'PUT',
+      body: JSON.stringify({ taskIds, status })
+    });
+  },
+
+  async getSubtasks(projectId, taskId) {
+    return await this.request(`/projects/${projectId}/tasks/${taskId}/subtasks`);
+  },
+
   // COMMENTS ENDPOINTS
   async getComments(taskId) {
     return await this.request(`/tasks/${taskId}/comments`);
   },
 
-  async addComment(taskId, content) {
+  async addComment(taskId, content, is_report = false) {
     return await this.request(`/tasks/${taskId}/comments`, {
       method: 'POST',
-      body: JSON.stringify({ content })
+      body: JSON.stringify({ content, is_report })
     });
   },
 

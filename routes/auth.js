@@ -8,13 +8,13 @@ const { JWT_SECRET, authenticateToken } = require('../middleware/auth');
 // Register a new user
 router.post('/register', async (req, res) => {
   try {
-    const { email, password, name, role } = req.body;
+    const { email, password, name, role, designation } = req.body;
 
     if (!email || !password || !name || !role) {
       return res.status(400).json({ error: 'All fields (email, password, name, role) are required' });
     }
 
-    const validRoles = ['CEO_ADMIN', 'PROJECT_MANAGER', 'TEAM_MEMBER', 'VIEWER_CLIENT'];
+    const validRoles = ['CEO', 'PM', 'TEAM_MEMBER'];
     if (!validRoles.includes(role)) {
       return res.status(400).json({ error: 'Invalid user role specified' });
     }
@@ -29,8 +29,8 @@ router.post('/register', async (req, res) => {
     const passwordHash = await bcrypt.hash(password, salt);
 
     const result = await db.run(
-      'INSERT INTO users (email, password_hash, name, role) VALUES (?, ?, ?, ?)',
-      [email, passwordHash, name, role]
+      'INSERT INTO users (email, password_hash, name, role, designation) VALUES (?, ?, ?, ?, ?)',
+      [email, passwordHash, name, role, designation || null]
     );
 
     res.status(201).json({
@@ -68,7 +68,8 @@ router.post('/login', async (req, res) => {
         id: user.id,
         email: user.email,
         name: user.name,
-        role: user.role
+        role: user.role,
+        designation: user.designation
       },
       JWT_SECRET,
       { expiresIn: '24h' }
@@ -80,7 +81,8 @@ router.post('/login', async (req, res) => {
         id: user.id,
         email: user.email,
         name: user.name,
-        role: user.role
+        role: user.role,
+        designation: user.designation
       }
     });
   } catch (error) {
@@ -92,7 +94,7 @@ router.post('/login', async (req, res) => {
 // Get current user profile
 router.get('/me', authenticateToken, async (req, res) => {
   try {
-    const user = await db.get('SELECT id, email, name, role, created_at FROM users WHERE id = ?', [req.user.id]);
+    const user = await db.get('SELECT id, email, name, role, designation, created_at FROM users WHERE id = ?', [req.user.id]);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -106,11 +108,35 @@ router.get('/me', authenticateToken, async (req, res) => {
 // List all users (useful for dropdown assignments and project managers)
 router.get('/users', authenticateToken, async (req, res) => {
   try {
-    const users = await db.query('SELECT id, email, name, role FROM users ORDER BY name ASC');
+    const users = await db.query('SELECT id, email, name, role, designation FROM users ORDER BY name ASC');
     res.json(users);
   } catch (error) {
     console.error('Get users error:', error);
     res.status(500).json({ error: 'Server error listing users' });
+  }
+});
+
+// Update user profile
+router.put('/profile', authenticateToken, async (req, res) => {
+  try {
+    const { name, designation } = req.body;
+    if (!name) {
+      return res.status(400).json({ error: 'Name is required' });
+    }
+
+    await db.run(
+      'UPDATE users SET name = ?, designation = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [name, designation || null, req.user.id]
+    );
+
+    const updatedUser = await db.get('SELECT id, email, name, role, designation FROM users WHERE id = ?', [req.user.id]);
+    res.json({
+      message: 'Profile updated successfully',
+      user: updatedUser
+    });
+  } catch (error) {
+    console.error('Update profile error:', error);
+    res.status(500).json({ error: 'Server error updating profile' });
   }
 });
 

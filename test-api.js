@@ -74,36 +74,47 @@ const runTests = async () => {
       return await res.json();
     };
 
-    const adminLogin = await loginRole('admin@example.com', 'password123');
-    assert(adminLogin.token && adminLogin.user.role === 'CEO_ADMIN', 'CEO/Admin can log in and receives correct role');
+    const adminLogin = await loginRole('tom@example.com', '123456');
+    assert(adminLogin.token && adminLogin.user.role === 'CEO', 'CEO Tom can log in and receives correct role');
     tokens.admin = adminLogin.token;
 
-    const pmLogin = await loginRole('pm@example.com', 'password123');
-    assert(pmLogin.token && pmLogin.user.role === 'PROJECT_MANAGER', 'Project Manager can log in and receives correct role');
+    const pmLogin = await loginRole('alice@example.com', '123456');
+    assert(pmLogin.token && pmLogin.user.role === 'PM', 'Project Manager Alice can log in and receives correct role');
     tokens.pm = pmLogin.token;
 
-    const memberLogin = await loginRole('member@example.com', 'password123');
-    assert(memberLogin.token && memberLogin.user.role === 'TEAM_MEMBER', 'Team Member can log in and receives correct role');
+    const memberLogin = await loginRole('rose@example.com', '123456');
+    assert(memberLogin.token && memberLogin.user.role === 'TEAM_MEMBER', 'Team Member Rose can log in and receives correct role');
     tokens.member = memberLogin.token;
 
-    const viewerLogin = await loginRole('viewer@example.com', 'password123');
-    assert(viewerLogin.token && viewerLogin.user.role === 'VIEWER_CLIENT', 'Viewer/Client can log in and receives correct role');
+    const viewerLogin = await loginRole('charlie@example.com', '123456');
+    assert(viewerLogin.token && viewerLogin.user.role === 'TEAM_MEMBER', 'Team Member Charlie can log in and receives correct role');
     tokens.viewer = viewerLogin.token;
 
     // 2. Test Project Access Control (Least Privilege)
     console.log('\n--- 2. Testing Project Access Policies ---');
     
-    // PM creates a project
-    const createProjectRes = await fetch(`${BASE_URL}/projects`, {
+    // PM attempts to create a project (Should fail / 403)
+    const pmCreateProjectRes = await fetch(`${BASE_URL}/projects`, {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${tokens.pm}`
       },
+      body: JSON.stringify({ name: 'PM Violating Project', description: 'Should fail' })
+    });
+    assert(pmCreateProjectRes.status === 403, 'Project Manager Alice is BLOCKED from creating projects');
+
+    // CEO Tom creates a project
+    const createProjectRes = await fetch(`${BASE_URL}/projects`, {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${tokens.admin}`
+      },
       body: JSON.stringify({ name: 'Integration Test Project', description: 'Testing creation' })
     });
     const createProjectData = await createProjectRes.json();
-    assert(createProjectRes.status === 201, 'Project Manager can create new projects');
+    assert(createProjectRes.status === 201, 'CEO Tom can create new projects');
     const newProjectId = createProjectData.projectId;
 
     // Team Member attempts to create a project
@@ -115,36 +126,36 @@ const runTests = async () => {
       },
       body: JSON.stringify({ name: 'Member Violating Project', description: 'Should fail' })
     });
-    assert(memberCreateProjectRes.status === 403, 'Team Member is BLOCKED from creating projects');
+    assert(memberCreateProjectRes.status === 403, 'Team Member Rose is BLOCKED from creating projects');
 
-    // Access restricted projects (Project 2: Mobile App has only Admin and PM Bob, Member Charlie is not in it)
+    // Access restricted projects (Project 2: Mobile App has Tom and Alice, Rose is not in it)
     const memberGetProject2 = await fetch(`${BASE_URL}/projects/${testProject2Id}`, {
       headers: { 'Authorization': `Bearer ${tokens.member}` }
     });
-    assert(memberGetProject2.status === 403, 'Team Member is BLOCKED from retrieving a project they are not a member of');
+    assert(memberGetProject2.status === 403, 'Team Member Rose is BLOCKED from retrieving a project they are not a member of');
 
     const adminGetProject2 = await fetch(`${BASE_URL}/projects/${testProject2Id}`, {
       headers: { 'Authorization': `Bearer ${tokens.admin}` }
     });
-    assert(adminGetProject2.status === 200, 'Admin can bypass project membership checks to access any project');
+    assert(adminGetProject2.status === 200, 'CEO can bypass project membership checks to access any project');
 
     // 3. Test Task Visibility Rules
     console.log('\n--- 3. Testing Task Listing Visibility Filters ---');
     
-    // Admin lists tasks for Project 1 (Website Redesign)
+    // CEO lists tasks for Project 1 (Website Redesign)
     const adminGetTasks = await fetch(`${BASE_URL}/projects/${testProjectId}/tasks`, {
       headers: { 'Authorization': `Bearer ${tokens.admin}` }
     });
     const adminTasks = await adminGetTasks.json();
-    assert(adminTasks.length >= 4, 'Admin sees all tasks in the project');
+    assert(adminTasks.length >= 3, 'CEO Tom sees all tasks in the project');
 
     // Team Member lists tasks (Should only see tasks assigned to them)
     const memberGetTasks = await fetch(`${BASE_URL}/projects/${testProjectId}/tasks`, {
       headers: { 'Authorization': `Bearer ${tokens.member}` }
     });
     const memberTasks = await memberGetTasks.json();
-    const allAssigned = memberTasks.every(t => t.assignee_id === 3); // 3 is Charlie's ID
-    assert(allAssigned, 'Team Member sees ONLY tasks assigned directly to them');
+    const allAssigned = memberTasks.every(t => t.assignee_id === 3); // 3 is Rose's ID
+    assert(allAssigned, 'Team Member Rose sees ONLY tasks assigned directly to them');
 
     // 4. Test Task Modification Safeguards
     console.log('\n--- 4. Testing Task Editing Restrictions ---');
@@ -182,7 +193,7 @@ const runTests = async () => {
     });
     assert(memberUpdatePMTask.status === 403, 'Team Member is BLOCKED from editing tasks in projects they do not belong to');
 
-    // Client/Viewer tries to update status of a task
+    // Team Member who is not assignee tries to update status of a task
     const viewerUpdateTask = await fetch(`${BASE_URL}/projects/${testProjectId}/tasks/${charlieTaskId}`, {
       method: 'PUT',
       headers: { 
@@ -191,7 +202,7 @@ const runTests = async () => {
       },
       body: JSON.stringify({ status: 'DONE' })
     });
-    assert(viewerUpdateTask.status === 403, 'Viewer/Client is BLOCKED from editing task status (Read-only access)');
+    assert(viewerUpdateTask.status === 403, 'Team Member is BLOCKED from editing task status on tasks not assigned to them');
 
     // 5. Test Delay Flag
     console.log('\n--- 5. Testing Delay Flag Query Logic ---');
@@ -233,18 +244,18 @@ const runTests = async () => {
       },
       body: JSON.stringify({ content: 'API integration testing comment' })
     });
-    assert(memberComment.status === 201, 'Team Member can add comments to their own tasks');
+    assert(memberComment.status === 201, 'Team Member Rose can add comments to Project 1 tasks');
 
-    // Viewer tries to comment
-    const viewerComment = await fetch(`${BASE_URL}/tasks/${charlieTaskId}/comments`, {
+    // Member Rose tries to comment on a task in Project 2 (which she is not a member of)
+    const unauthorizedComment = await fetch(`${BASE_URL}/tasks/${pmTaskId}/comments`, {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${tokens.viewer}`
+        'Authorization': `Bearer ${tokens.member}`
       },
-      body: JSON.stringify({ content: 'Viewer hacker comment' })
+      body: JSON.stringify({ content: 'Unauthorized hacker comment' })
     });
-    assert(viewerComment.status === 403, 'Viewer/Client is BLOCKED from writing task comments');
+    assert(unauthorizedComment.status === 403, 'Team Member Rose is BLOCKED from commenting on tasks in projects they do not belong to');
 
     // Check activity log contains entries
     const logRes = await fetch(`${BASE_URL}/projects/${testProjectId}/logs`, {
@@ -252,6 +263,75 @@ const runTests = async () => {
     });
     const logData = await logRes.json();
     assert(logData.length > 0, 'Activity Log returns valid audit records');
+
+    // 8. Testing Custom Task Labels
+    console.log('\n--- 8. Testing Custom Task Labels ---');
+    // CEO creates task with labels
+    const createLabelsRes = await fetch(`${BASE_URL}/projects/${testProjectId}/tasks`, {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${tokens.admin}`
+      },
+      body: JSON.stringify({ 
+        title: 'Task with labels', 
+        status: 'TO_DO', 
+        labels: 'TEST LABEL, ANOTHER ONE' 
+      })
+    });
+    assert(createLabelsRes.status === 201, 'CEO can create task with labels');
+    const createLabelsData = await createLabelsRes.json();
+    const testTaskId = createLabelsData.taskId;
+
+    // Get task and verify labels
+    const getTaskRes = await fetch(`${BASE_URL}/projects/${testProjectId}/tasks/${testTaskId}`, {
+      headers: { 'Authorization': `Bearer ${tokens.admin}` }
+    });
+    const testTask = await getTaskRes.json();
+    assert(testTask.labels === 'TEST LABEL, ANOTHER ONE', 'Task details returns correct labels');
+
+    // PM updates labels
+    const updateLabelsRes = await fetch(`${BASE_URL}/projects/${testProjectId}/tasks/${testTaskId}`, {
+      method: 'PUT',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${tokens.pm}`
+      },
+      body: JSON.stringify({ 
+        title: 'Task with labels',
+        labels: 'UPDATED LABEL' 
+      })
+    });
+    assert(updateLabelsRes.status === 200, 'PM can update task labels');
+
+    // Get task and verify updated labels
+    const getTaskRes2 = await fetch(`${BASE_URL}/projects/${testProjectId}/tasks/${testTaskId}`, {
+      headers: { 'Authorization': `Bearer ${tokens.admin}` }
+    });
+    const testTask2 = await getTaskRes2.json();
+    assert(testTask2.labels === 'UPDATED LABEL', 'Task details returns updated labels');
+
+    // CEO removes labels
+    const removeLabelsRes = await fetch(`${BASE_URL}/projects/${testProjectId}/tasks/${testTaskId}`, {
+      method: 'PUT',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${tokens.admin}`
+      },
+      body: JSON.stringify({ 
+        title: 'Task with labels',
+        labels: '' 
+      })
+    });
+    assert(removeLabelsRes.status === 200, 'CEO can remove task labels');
+
+    // Get task and verify labels are empty
+    const getTaskRes3 = await fetch(`${BASE_URL}/projects/${testProjectId}/tasks/${testTaskId}`, {
+      headers: { 'Authorization': `Bearer ${tokens.admin}` }
+    });
+    const testTask3 = await getTaskRes3.json();
+    assert(testTask3.labels === '', 'Task details returns empty labels when removed');
+    console.log('✅ PASS: Custom task labels creation, update, and removal verified');
 
     console.log('\n==================================================');
     console.log('     🎉 ALL BACKEND RBAC INTEGRATION TESTS PASSED 🎉    ');

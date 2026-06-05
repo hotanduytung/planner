@@ -23,23 +23,27 @@ router.get('/', authenticateToken, requireProjectAccess, async (req, res) => {
     if (req.user.role === 'TEAM_MEMBER') {
       // Team members only see tasks assigned to them
       tasks = await db.query(
-        `SELECT t.*, u.name as assignee_name, u.email as assignee_email,
-         (t.status != 'DONE' AND t.deadline IS NOT NULL AND datetime('now') > datetime(t.deadline)) as is_delayed
+        `SELECT t.*, u.name as assignee_name, u.email as assignee_email, u.designation as assignee_designation,
+         (t.status != 'DONE' AND t.deadline IS NOT NULL AND datetime('now') > datetime(t.deadline)) as is_delayed,
+         (SELECT COUNT(*) FROM tasks WHERE parent_id = t.id) as subtask_total,
+         (SELECT COUNT(*) FROM tasks WHERE parent_id = t.id AND status = 'DONE') as subtask_completed
          FROM tasks t 
          LEFT JOIN users u ON t.assignee_id = u.id 
-         WHERE t.project_id = ? AND t.assignee_id = ?
-         ORDER BY t.created_at ASC`,
+         WHERE t.project_id = ? AND t.assignee_id = ? AND t.parent_id IS NULL
+         ORDER BY t.position ASC, t.created_at ASC`,
         [projectId, req.user.id]
       );
     } else {
       // Admins, PMs, and Viewers see all tasks
       tasks = await db.query(
-        `SELECT t.*, u.name as assignee_name, u.email as assignee_email,
-         (t.status != 'DONE' AND t.deadline IS NOT NULL AND datetime('now') > datetime(t.deadline)) as is_delayed
+        `SELECT t.*, u.name as assignee_name, u.email as assignee_email, u.designation as assignee_designation,
+         (t.status != 'DONE' AND t.deadline IS NOT NULL AND datetime('now') > datetime(t.deadline)) as is_delayed,
+         (SELECT COUNT(*) FROM tasks WHERE parent_id = t.id) as subtask_total,
+         (SELECT COUNT(*) FROM tasks WHERE parent_id = t.id AND status = 'DONE') as subtask_completed
          FROM tasks t 
          LEFT JOIN users u ON t.assignee_id = u.id 
-         WHERE t.project_id = ?
-         ORDER BY t.created_at ASC`,
+         WHERE t.project_id = ? AND t.parent_id IS NULL
+         ORDER BY t.position ASC, t.created_at ASC`,
         [projectId]
       );
     }
@@ -55,16 +59,26 @@ router.get('/', authenticateToken, requireProjectAccess, async (req, res) => {
 router.post('/', authenticateToken, requireProjectAccess, async (req, res) => {
   try {
     const projectId = req.params.projectId;
-    
-    // Check role (Only Admin and PM can create tasks)
-    if (!['CEO_ADMIN', 'PROJECT_MANAGER'].includes(req.user.role)) {
-      return res.status(403).json({ error: 'Access denied: Only Admins and Project Managers can create tasks.' });
-    }
-
-    const { title, description, status, priority, deadline, assigneeId, checklist } = req.body;
+    const { title, description, status, priority, deadline, assigneeId, checklist, start_date, parent_id, position, labels } = req.body;
 
     if (!title) {
       return res.status(400).json({ error: 'Task title is required' });
+    }
+
+    // Role check and parent task permission logic
+    if (parent_id) {
+      const parentTask = await db.get('SELECT * FROM tasks WHERE id = ? AND project_id = ?', [parent_id, projectId]);
+      if (!parentTask) {
+        return res.status(404).json({ error: 'Parent task not found' });
+      }
+      if (req.user.role === 'TEAM_MEMBER' && parentTask.assignee_id !== req.user.id) {
+        return res.status(403).json({ error: 'Access denied: You can only add sub-tasks to tasks assigned to you.' });
+      }
+    } else {
+      // Top level task requires CEO or PM
+      if (!['CEO', 'PM'].includes(req.user.role)) {
+        return res.status(403).json({ error: 'Access denied: Only CEO and Project Managers can create top-level tasks.' });
+      }
     }
 
     // Validate status and priority
@@ -96,9 +110,9 @@ router.post('/', authenticateToken, requireProjectAccess, async (req, res) => {
     const serializedChecklist = checklist ? (typeof checklist === 'string' ? checklist : JSON.stringify(checklist)) : '[]';
 
     const result = await db.run(
-      `INSERT INTO tasks (project_id, title, description, status, priority, deadline, assignee_id, checklist) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [projectId, title, description || '', taskStatus, taskPriority, deadline || null, verifiedAssigneeId, serializedChecklist]
+      `INSERT INTO tasks (project_id, title, description, status, priority, deadline, assignee_id, checklist, start_date, parent_id, position, labels) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [projectId, title, description || '', taskStatus, taskPriority, deadline || null, verifiedAssigneeId, serializedChecklist, start_date || null, parent_id || null, position || 0, labels || '']
     );
 
     const taskId = result.id;
@@ -109,21 +123,109 @@ router.post('/', authenticateToken, requireProjectAccess, async (req, res) => {
     }
 
     // Log the activity
+    const actionDesc = parent_id 
+      ? `${req.user.name} created sub-task "${title}" under parent task (ID: ${parent_id}).`
+      : `${req.user.name} created task "${title}" (Status: ${taskStatus}, Assignee: ${assigneeText}).`;
+
     await logActivity(
       projectId,
       taskId,
       req.user.id,
-      'CREATE_TASK',
-      `${req.user.name} created task "${title}" (Status: ${taskStatus}, Assignee: ${assigneeText}).`
+      parent_id ? 'CREATE_SUBTASK' : 'CREATE_TASK',
+      actionDesc
     );
 
     res.status(201).json({
-      message: 'Task created successfully',
+      message: parent_id ? 'Sub-task created successfully' : 'Task created successfully',
       taskId
     });
   } catch (error) {
     console.error('Create task error:', error);
     res.status(500).json({ error: 'Server error creating task' });
+  }
+});
+
+// PUT /api/projects/:projectId/tasks/reorder - Reorder tasks in a project
+router.put('/reorder', authenticateToken, requireProjectAccess, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { taskIds, status } = req.body;
+
+    if (!Array.isArray(taskIds)) {
+      return res.status(400).json({ error: 'taskIds array is required' });
+    }
+
+    const role = req.user.role;
+    if (role === 'TEAM_MEMBER') {
+      for (const id of taskIds) {
+        const task = await db.get('SELECT assignee_id FROM tasks WHERE id = ?', [id]);
+        if (!task || task.assignee_id !== req.user.id) {
+          return res.status(403).json({ error: 'Access denied: You can only reorder tasks assigned to you.' });
+        }
+      }
+    }
+
+    for (let i = 0; i < taskIds.length; i++) {
+      const taskId = taskIds[i];
+      if (status) {
+        await db.run(
+          'UPDATE tasks SET position = ?, status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND project_id = ?',
+          [i, status, taskId, projectId]
+        );
+      } else {
+        await db.run(
+          'UPDATE tasks SET position = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND project_id = ?',
+          [i, taskId, projectId]
+        );
+      }
+    }
+
+    res.json({ message: 'Tasks reordered successfully' });
+  } catch (error) {
+    console.error('Reorder tasks error:', error);
+    res.status(500).json({ error: 'Server error reordering tasks' });
+  }
+});
+
+// GET /api/projects/:projectId/tasks/:taskId/subtasks - Get sub-tasks of a task
+router.get('/:taskId/subtasks', authenticateToken, requireProjectAccess, async (req, res) => {
+  try {
+    const { projectId, taskId } = req.params;
+    const subtasks = await db.query(
+      `SELECT t.*, u.name as assignee_name, u.email as assignee_email, u.designation as assignee_designation,
+       (t.status != 'DONE' AND t.deadline IS NOT NULL AND datetime('now') > datetime(t.deadline)) as is_delayed
+       FROM tasks t
+       LEFT JOIN users u ON t.assignee_id = u.id
+       WHERE t.project_id = ? AND t.parent_id = ?
+       ORDER BY t.position ASC, t.created_at ASC`,
+      [projectId, taskId]
+    );
+    res.json(subtasks);
+  } catch (error) {
+    console.error('List subtasks error:', error);
+    res.status(500).json({ error: 'Server error retrieving subtasks' });
+  }
+});
+
+// GET /api/projects/:projectId/tasks/:taskId - Get details of a single task
+router.get('/:taskId', authenticateToken, requireProjectAccess, async (req, res) => {
+  try {
+    const { projectId, taskId } = req.params;
+    const task = await db.get(
+      `SELECT t.*, u.name as assignee_name, u.email as assignee_email, u.designation as assignee_designation,
+       (t.status != 'DONE' AND t.deadline IS NOT NULL AND datetime('now') > datetime(t.deadline)) as is_delayed
+       FROM tasks t
+       LEFT JOIN users u ON t.assignee_id = u.id
+       WHERE t.id = ? AND t.project_id = ?`,
+      [taskId, projectId]
+    );
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    res.json(task);
+  } catch (error) {
+    console.error('Get task error:', error);
+    res.status(500).json({ error: 'Server error retrieving task details' });
   }
 });
 
@@ -140,29 +242,35 @@ router.put('/:taskId', authenticateToken, requireProjectAccess, async (req, res)
 
     const role = req.user.role;
     
-    // Block Viewer/Client
-    if (role === 'VIEWER_CLIENT') {
-      return res.status(403).json({ error: 'Access denied: Viewers have read-only access.' });
-    }
+
 
     // Enforce Team Member restrictions
     if (role === 'TEAM_MEMBER') {
-      if (task.assignee_id !== req.user.id) {
+      let isAllowed = task.assignee_id === req.user.id;
+      if (!isAllowed && task.parent_id) {
+        const parentTask = await db.get('SELECT assignee_id FROM tasks WHERE id = ?', [task.parent_id]);
+        if (parentTask && parentTask.assignee_id === req.user.id) {
+          isAllowed = true;
+        }
+      }
+      if (!isAllowed) {
         return res.status(403).json({ error: 'Access denied: You can only update tasks assigned to you.' });
       }
 
-      // Check if trying to edit fields other than status and checklist
-      const forbiddenFields = Object.keys(req.body).filter(key => key !== 'status' && key !== 'checklist');
-      if (forbiddenFields.length > 0) {
-        return res.status(403).json({ 
-          error: 'Access denied: Team Members are only authorized to update the task status and checklist.' 
-        });
+      // If it is a main task, they can only edit status and checklist.
+      if (!task.parent_id) {
+        const forbiddenFields = Object.keys(req.body).filter(key => key !== 'status' && key !== 'checklist');
+        if (forbiddenFields.length > 0) {
+          return res.status(403).json({ 
+            error: 'Access denied: Team Members are only authorized to update status and checklist on top-level tasks.' 
+          });
+        }
       }
     }
 
     // Process update
-    if (role === 'TEAM_MEMBER') {
-      // ONLY update status and/or checklist
+    if (role === 'TEAM_MEMBER' && !task.parent_id) {
+      // ONLY update status and/or checklist for top-level tasks
       const { status, checklist } = req.body;
       if (status === undefined && checklist === undefined) {
         return res.status(400).json({ error: 'Status or checklist is required' });
@@ -208,8 +316,8 @@ router.put('/:taskId', authenticateToken, requireProjectAccess, async (req, res)
 
       return res.json({ message: 'Task updated successfully' });
     } else {
-      // CEO_ADMIN or PROJECT_MANAGER - can update everything
-      const { title, description, status, priority, deadline, assigneeId, checklist } = req.body;
+      // CEO or PM - can update everything
+      const { title, description, status, priority, deadline, assigneeId, checklist, start_date, labels } = req.body;
       
       const newTitle = title !== undefined ? title : task.title;
       const newDescription = description !== undefined ? description : task.description;
@@ -217,6 +325,8 @@ router.put('/:taskId', authenticateToken, requireProjectAccess, async (req, res)
       const newPriority = priority !== undefined ? priority : task.priority;
       const newDeadline = deadline !== undefined ? deadline : task.deadline;
       const newAssigneeId = assigneeId !== undefined ? assigneeId : task.assignee_id;
+      const newStartDate = start_date !== undefined ? start_date : task.start_date;
+      const newLabels = labels !== undefined ? labels : task.labels;
       let newChecklist = task.checklist;
       if (checklist !== undefined) {
         newChecklist = typeof checklist === 'string' ? checklist : JSON.stringify(checklist);
@@ -262,6 +372,12 @@ router.put('/:taskId', authenticateToken, requireProjectAccess, async (req, res)
       if (task.deadline !== newDeadline) {
         logDescriptions.push(`changed deadline from ${formatDate(task.deadline)} to ${formatDate(newDeadline)}`);
       }
+      if (task.start_date !== newStartDate) {
+        logDescriptions.push(`changed start date from ${formatDate(task.start_date)} to ${formatDate(newStartDate)}`);
+      }
+      if (task.labels !== newLabels) {
+        logDescriptions.push(`changed labels to "${newLabels}"`);
+      }
       if (task.assignee_id !== newAssigneeId) {
         let oldAssigneeName = 'Unassigned';
         let newAssigneeName = 'Unassigned';
@@ -281,9 +397,9 @@ router.put('/:taskId', authenticateToken, requireProjectAccess, async (req, res)
 
       await db.run(
         `UPDATE tasks 
-         SET title = ?, description = ?, status = ?, priority = ?, deadline = ?, assignee_id = ?, checklist = ?, updated_at = CURRENT_TIMESTAMP
+         SET title = ?, description = ?, status = ?, priority = ?, deadline = ?, assignee_id = ?, checklist = ?, start_date = ?, labels = ?, updated_at = CURRENT_TIMESTAMP
          WHERE id = ?`,
-        [newTitle, newDescription, newStatus, newPriority, newDeadline, newAssigneeId, newChecklist, taskId]
+        [newTitle, newDescription, newStatus, newPriority, newDeadline, newAssigneeId, newChecklist, newStartDate, newLabels, taskId]
       );
 
       // Log activity if there was any change
@@ -305,9 +421,9 @@ router.delete('/:taskId', authenticateToken, requireProjectAccess, async (req, r
   try {
     const { projectId, taskId } = req.params;
 
-    // Check role (Only Admin and PM can delete tasks)
-    if (!['CEO_ADMIN', 'PROJECT_MANAGER'].includes(req.user.role)) {
-      return res.status(403).json({ error: 'Access denied: Only Admins and Project Managers can delete tasks.' });
+    // Check role (Only CEO and PM can delete tasks)
+    if (!['CEO', 'PM'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Access denied: Only CEO and Project Managers can delete tasks.' });
     }
 
     const task = await db.get('SELECT title FROM tasks WHERE id = ? AND project_id = ?', [taskId, projectId]);

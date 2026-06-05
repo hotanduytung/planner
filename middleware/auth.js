@@ -53,7 +53,7 @@ const requireProjectAccess = async (req, res, next) => {
     }
 
     // Admins bypass project-membership checks
-    if (req.user.role === 'CEO_ADMIN') {
+    if (req.user.role === 'CEO') {
       return next();
     }
 

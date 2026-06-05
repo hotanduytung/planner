@@ -8,7 +8,7 @@ const { logActivity } = require('../utils/logger');
 router.get('/', authenticateToken, async (req, res) => {
   try {
     let projects;
-    if (req.user.role === 'CEO_ADMIN') {
+    if (req.user.role === 'CEO') {
       // Admins see all projects
       projects = await db.query(`
         SELECT p.*, u.name as creator_name 
@@ -35,17 +35,24 @@ router.get('/', authenticateToken, async (req, res) => {
 });
 
 // POST /api/projects - Create a new project (Admins and PMs only)
-router.post('/', authenticateToken, requireRoles(['CEO_ADMIN', 'PROJECT_MANAGER']), async (req, res) => {
+router.post('/', authenticateToken, requireRoles(['CEO']), async (req, res) => {
   try {
     const { name, description } = req.body;
     if (!name) {
       return res.status(400).json({ error: 'Project name is required' });
     }
 
+    const defaultBuckets = JSON.stringify({
+      'TO_DO': 'To do',
+      'IN_PROGRESS': 'In progress',
+      'REVIEW': 'Review',
+      'DONE': 'Completed'
+    });
+
     // Insert project
     const result = await db.run(
-      'INSERT INTO projects (name, description, creator_id) VALUES (?, ?, ?)',
-      [name, description || '', req.user.id]
+      'INSERT INTO projects (name, description, creator_id, bucket_names) VALUES (?, ?, ?, ?)',
+      [name, description || '', req.user.id, defaultBuckets]
     );
 
     const projectId = result.id;
@@ -62,7 +69,7 @@ router.post('/', authenticateToken, requireRoles(['CEO_ADMIN', 'PROJECT_MANAGER'
       null, 
       req.user.id, 
       'CREATE_PROJECT', 
-      `${req.user.name} (${req.user.role === 'CEO_ADMIN' ? 'Admin' : 'PM'}) created project "${name}".`
+      `${req.user.name} (${req.user.role === 'CEO' ? 'CEO' : 'PM'}) created project "${name}".`
     );
 
     res.status(201).json({
@@ -98,22 +105,30 @@ router.get('/:id', authenticateToken, requireProjectAccess, async (req, res) => 
   }
 });
 
-// PUT /api/projects/:id - Update a project (Admins and PMs only)
-router.put('/:id', authenticateToken, requireProjectAccess, requireRoles(['CEO_ADMIN', 'PROJECT_MANAGER']), async (req, res) => {
+// PUT /api/projects/:id - Update a project (CEO and PM only)
+router.put('/:id', authenticateToken, requireProjectAccess, requireRoles(['CEO', 'PM']), async (req, res) => {
   try {
-    const { name, description } = req.body;
+    const { name, description, bucket_names, custom_buckets } = req.body;
     if (!name) {
       return res.status(400).json({ error: 'Project name is required' });
     }
 
-    const project = await db.get('SELECT name FROM projects WHERE id = ?', [req.params.id]);
+    const project = await db.get('SELECT name, bucket_names, custom_buckets FROM projects WHERE id = ?', [req.params.id]);
     if (!project) {
       return res.status(404).json({ error: 'Project not found' });
     }
 
+    const updatedBucketNames = bucket_names !== undefined
+      ? (typeof bucket_names === 'string' ? bucket_names : JSON.stringify(bucket_names))
+      : project.bucket_names;
+
+    const updatedCustomBuckets = custom_buckets !== undefined
+      ? (typeof custom_buckets === 'string' ? custom_buckets : JSON.stringify(custom_buckets))
+      : (project.custom_buckets || '[]');
+
     await db.run(
-      'UPDATE projects SET name = ?, description = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-      [name, description || '', req.params.id]
+      'UPDATE projects SET name = ?, description = ?, bucket_names = ?, custom_buckets = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [name, description || '', updatedBucketNames, updatedCustomBuckets, req.params.id]
     );
 
     await logActivity(
@@ -131,8 +146,8 @@ router.put('/:id', authenticateToken, requireProjectAccess, requireRoles(['CEO_A
   }
 });
 
-// DELETE /api/projects/:id - Delete a project (Admins and PMs only)
-router.delete('/:id', authenticateToken, requireProjectAccess, requireRoles(['CEO_ADMIN', 'PROJECT_MANAGER']), async (req, res) => {
+// DELETE /api/projects/:id - Delete a project (CEO only)
+router.delete('/:id', authenticateToken, requireProjectAccess, requireRoles(['CEO']), async (req, res) => {
   try {
     const project = await db.get('SELECT name FROM projects WHERE id = ?', [req.params.id]);
     if (!project) {
@@ -162,7 +177,7 @@ router.delete('/:id', authenticateToken, requireProjectAccess, requireRoles(['CE
 router.get('/:id/members', authenticateToken, requireProjectAccess, async (req, res) => {
   try {
     const members = await db.query(`
-      SELECT u.id, u.name, u.email, u.role, pm.created_at as joined_at 
+      SELECT u.id, u.name, u.email, u.role, u.designation, pm.created_at as joined_at 
       FROM project_members pm
       JOIN users u ON pm.user_id = u.id
       WHERE pm.project_id = ?
@@ -175,8 +190,8 @@ router.get('/:id/members', authenticateToken, requireProjectAccess, async (req, 
   }
 });
 
-// POST /api/projects/:id/members - Add user to project (Admins and PMs only)
-router.post('/:id/members', authenticateToken, requireProjectAccess, requireRoles(['CEO_ADMIN', 'PROJECT_MANAGER']), async (req, res) => {
+// POST /api/projects/:id/members - Add user to project (CEO only)
+router.post('/:id/members', authenticateToken, requireProjectAccess, requireRoles(['CEO']), async (req, res) => {
   try {
     const { userId } = req.body;
     const projectId = req.params.id;
@@ -224,8 +239,8 @@ router.post('/:id/members', authenticateToken, requireProjectAccess, requireRole
   }
 });
 
-// DELETE /api/projects/:id/members/:userId - Remove member from project (Admins and PMs only)
-router.delete('/:id/members/:userId', authenticateToken, requireProjectAccess, requireRoles(['CEO_ADMIN', 'PROJECT_MANAGER']), async (req, res) => {
+// DELETE /api/projects/:id/members/:userId - Remove member from project (CEO only)
+router.delete('/:id/members/:userId', authenticateToken, requireProjectAccess, requireRoles(['CEO']), async (req, res) => {
   try {
     const projectId = req.params.id;
     const userIdToRemove = req.params.userId;
